@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![30%](https://geps.dev/progress/30) **30%** (3 / 10 tâches) | T-01, T-02 et T-03 complétés et validés. |
+| **Progression Globale** | ![40%](https://geps.dev/progress/40) **40%** (4 / 10 tâches) | T-01, T-02, T-03 et T-04 complétés et validés. |
 | **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **8 heures** | Fiches tactiques A et B, et initialisation de l'API FastAPI. |
+| **Temps Réel Consommé** | **12 heures** | Fiches tactiques A et B, squelette API et moteur RAG en mémoire. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 04 : Ingesteur RAG Local & Index en Mémoire** | Implémenter l'ingestion de la base de connaissances tactique. |
+| **Prochaine Tâche** | **📌 Tâche 05 : Moteur de Chat & Prompts Système** | Implémenter le service de chat avec historique et prompts système. |
 
 ---
 
@@ -23,8 +23,8 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 - **Temps :** 6h consommées / 6h estimées
 
 ### 🖥️ Bloc B : Infrastructure & Backend (Jours 16 - 25)
-- **Progression :** 25% (1 / 4 tâches terminées)
-- **Temps :** 2h consommées / 13h estimées
+- **Progression :** 50% (2 / 4 tâches terminées)
+- **Temps :** 6h consommées / 13h estimées
 
 ### 🎨 Bloc C : Frontend Conversationnel (Jours 26 - 32)
 - **Progression :** 0% (0 / 3 tâches terminées)
@@ -43,7 +43,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-01** | A | Base de Connaissances - Bloc Bas & Sortie | `DONE` | Critique | 3h | 3h | Aucune | Aucune |
 | **T-02** | A | Base de Connaissances - Pressing & Rôles | `DONE` | Critique | 3h | 3h | T-01 | Aucune |
 | **T-03** | B | Setup de l'Environnement Backend & FastAPI | `DONE` | Critique | 2h | 2h | Aucune | Versioning de python-dotenv / Pydantic v2 |
-| **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `TODO` | Critique | 4h | - | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
+| **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `DONE` | Critique | 4h | 4h | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
 | **T-05** | B | Moteur de Chat & Prompts Système | `TODO` | Critique | 4h | - | T-04 | Précision tactique de la réponse du modèle |
 | **T-06** | B | Générateur de Rapports PDF Tactiques | `TODO` | Haute | 3h | - | T-03 | Mise en page ReportLab / débordement de page |
 | **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `TODO` | Haute | 4h | - | Aucune | Intégration Tailwind CDN vs CSS Custom |
@@ -75,14 +75,16 @@ stateDiagram-v2
 
 ## 🔍 5. Focus Tâche Recommandée
 
-### [T-04] Ingesteur RAG Local & Index en Mémoire
-- **Description :** Implémenter le chargeur de documents tactiques markdown de la base de connaissances. Créer l'indexation sémantique en mémoire (sans base de données vectorielle complexe pour le MVP) en utilisant les API d'embeddings d'OpenAI.
+### [T-05] Moteur de Chat & Prompts Système
+- **Description :** Implémenter le service de chat intégrant l'historique conversationnel de l'utilisateur, la sélection dynamique du mode d'assistance (Coach tactique, Analyste technique, Fan passionné) et l'injection automatique des chunks RAG récupérés dans le prompt système d'OpenAI.
 - **Fichiers concernés :**
-  - `backend/app/services/rag_service.py` (Nouveau)
-  - `backend/tests/test_rag.py` (Nouveau)
+  - `backend/app/services/chat_service.py` (Nouveau)
+  - `backend/tests/test_chat_service.py` (Nouveau)
+  - `backend/app/api/chat.py` (Nouveau)
 - **Critères de validation :**
-  - Les fichiers MD de la base de connaissances sont parsés et découpés en chunks sémantiques.
-  - La recherche sémantique renvoie les chunks les plus proches avec leur score de similarité cosinus.
+  - Les réponses de l'IA intègrent des citations et sources issues des chunks RAG.
+  - L'historique des échanges est conservé et pris en compte par le modèle de chat.
+  - La route `POST /api/chat` renvoie une réponse textuelle cohérente.
 
 ---
 
