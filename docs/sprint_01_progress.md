@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![90%](https://geps.dev/progress/90) **90%** (9 / 10 tâches) | T-01 à T-08 + T-08.5 complétés et validés. |
-| **Temps Total Estimé** | **35 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **30 heures** | RAG Quality Fix + Session UX frontend complétés. |
+| **Progression Globale** | ![95%](https://geps.dev/progress/95) **95%** (10 / 11 tâches) | T-09 Persistence & Actions Rapides complété. |
+| **Temps Total Estimé** | **38 heures** | Estimation cumulée pour un développeur solo. |
+| **Temps Réel Consommé** | **33 heures** | localStorage, Copier, Simplifier, Approfondir, Export PDF implémentés. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 09 : Tests d'Intégration & Déploiement** | Finaliser les tests end-to-end et préparer CORS pour production. |
+| **Prochaine Tâche** | **📌 Tâche 10 : Tests d'Intégration & Déploiement** | CORS production, tests end-to-end, configuration Render/Railway. |
 
 ---
 
@@ -49,7 +49,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `DONE` | Haute | 4h | 4h | Aucune | Aucune |
 | **T-08** | C | Logique de Chat & Connexion API | `DONE` | Critique | 4h | 4h | T-05, T-07 | Aucune |
 | **T-08.5** | C | Query Understanding & RAG Quality Fix + Session UX | `DONE` | Haute | 2h | 2h | T-08 | Aucune |
-| **T-09** | C | Persistence Locale & Actions Rapides | `TODO` | Haute | 3h | - | T-06, T-08 | Limites de taille de localStorage |
+| **T-09** | C | Persistence Locale & Actions Rapides | `DONE` | Haute | 3h | 3h | T-06, T-08 | Aucune |
 | **T-10** | D | Tests d'Intégration & Configuration Déploiement | `TODO` | Moyenne | 3h | - | Tous | Configuration CORS en production sur Render/Railway |
 
 ---
