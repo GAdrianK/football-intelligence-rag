@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![50%](https://geps.dev/progress/50) **50%** (5 / 10 tâches) | T-01 à T-05 complétés et validés. |
+| **Progression Globale** | ![60%](https://geps.dev/progress/60) **60%** (6 / 10 tâches) | T-01 à T-06 complétés et validés. |
 | **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **16 heures** | Base de connaissances, API FastAPI, moteur RAG et ChatService en place. |
+| **Temps Réel Consommé** | **19 heures** | Base de connaissances, API FastAPI, RAG, ChatService et Générateur PDF opérationnels. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 06 : Générateur de Rapports PDF Tactiques** | Implémenter le service de génération de PDF pour exporter les fiches. |
+| **Prochaine Tâche** | **📌 Tâche 07 : Interface Frontend CSS Premium & Layout HTML** | Concevoir la structure de l'application et sa charte graphique moderne. |
 
 ---
 
@@ -23,8 +23,8 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 - **Temps :** 6h consommées / 6h estimées
 
 ### 🖥️ Bloc B : Infrastructure & Backend (Jours 16 - 25)
-- **Progression :** 75% (3 / 4 tâches terminées)
-- **Temps :** 10h consommées / 13h estimées
+- **Progression :** 100% (4 / 4 tâches terminées)
+- **Temps :** 13h consommées / 13h estimées
 
 ### 🎨 Bloc C : Frontend Conversationnel (Jours 26 - 32)
 - **Progression :** 0% (0 / 3 tâches terminées)
@@ -45,7 +45,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-03** | B | Setup de l'Environnement Backend & FastAPI | `DONE` | Critique | 2h | 2h | Aucune | Versioning de python-dotenv / Pydantic v2 |
 | **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `DONE` | Critique | 4h | 4h | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
 | **T-05** | B | Moteur de Chat & Prompts Système | `DONE` | Critique | 4h | 4h | T-04 | Précision tactique de la réponse du modèle |
-| **T-06** | B | Générateur de Rapports PDF Tactiques | `TODO` | Haute | 3h | - | T-03 | Mise en page ReportLab / débordement de page |
+| **T-06** | B | Générateur de Rapports PDF Tactiques | `DONE` | Haute | 3h | 3h | T-03 | Mise en page ReportLab / débordement de page |
 | **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `TODO` | Haute | 4h | - | Aucune | Intégration Tailwind CDN vs CSS Custom |
 | **T-08** | C | Logique de Chat & Connexion API | `TODO` | Critique | 4h | - | T-05, T-07 | Gestion du streaming de texte en vanilla JS |
 | **T-09** | C | Persistence Locale & Actions Rapides | `TODO` | Haute | 3h | - | T-06, T-08 | Limites de taille de localStorage |
@@ -75,16 +75,14 @@ stateDiagram-v2
 
 ## 🔍 5. Focus Tâche Recommandée
 
-### [T-06] Générateur de Rapports PDF Tactiques
-- **Description :** Implémenter le service de génération de rapports PDF tactiques personnalisés en utilisant la bibliothèque `reportlab`. Le rapport doit intégrer les analyses issues de la conversation de chat et le contexte tactique sous un format exportable et esthétique.
+### [T-07] Interface Frontend CSS Premium & Layout HTML
+- **Description :** Concevoir la structure visuelle de l'application (Single Page Application). Le design doit être extrêmement soigné : Dark mode complet, arrière-plan ardoise sombre, effets de verre dépoli (glassmorphism), barre de menu latérale, sélecteur de mode sous forme de gros boutons interactifs et typographie épurée.
 - **Fichiers concernés :**
-  - `backend/app/services/pdf_generator.py` (Nouveau)
-  - `backend/tests/test_pdf_generator.py` (Nouveau)
-  - `backend/app/api/pdf.py` (Nouveau)
+  - `frontend/index.html` (Nouveau)
+  - `frontend/styles.css` (Nouveau)
 - **Critères de validation :**
-  - Un fichier PDF binaire valide est généré sans plantage.
-  - La mise en page du rapport est structurée (en-tête, tableau récapitulatif, blocs de texte).
-  - L'API expose un endpoint `/api/pdf/generate` retournant le flux binaire du PDF avec les en-têtes HTTP appropriés.
+  - L'interface s'affiche de manière fluide sur navigateur de bureau et mobile (responsive complet).
+  - Les boutons de sélection de mode (Coach, Analyste, Fan) changent d'état actif de façon dynamique et élégante.
 
 ---
 
