@@ -163,6 +163,7 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
     def _is_query_in_sources(self, query: str, sources: List[SourceReference]) -> bool:
         """
         Vérifie si la requête contient au moins un terme significatif présent dans les sources.
+        Supports automatic hyphenation/de-hyphenation for formations.
         """
         import re
         # Normaliser et nettoyer la requête
@@ -189,10 +190,31 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
         source_text_combined = " ".join([s.text.lower() for s in sources])
         source_text_clean = re.sub(r"[^\w\s-]", " ", source_text_combined)
         
+        # Extraire les tokens de la source pour une comparaison directe
+        source_tokens = set(source_text_clean.split())
+        # Ajouter les variantes sans tiret (ex: 4-3-3 -> 433)
+        for t in list(source_tokens):
+            if '-' in t:
+                source_tokens.add(t.replace('-', ''))
+                
         for token in meaningful_tokens:
+            # Correspondance directe dans les tokens normalisés
+            if token in source_tokens:
+                return True
+                
+            # Correspondance regex standard
             pattern = r'\b' + re.escape(token) + r'\b'
             if re.search(pattern, source_text_clean):
                 return True
+                
+            # Si le token recherché est "433", chercher aussi "4-3-3"
+            if token.isdigit() and len(token) in [3, 4]:
+                with_hyphens = "-".join(list(token))
+                if with_hyphens in source_tokens:
+                    return True
+                pattern_hyphens = r'\b' + re.escape(with_hyphens) + r'\b'
+                if re.search(pattern_hyphens, source_text_clean):
+                    return True
                 
         return False
 
