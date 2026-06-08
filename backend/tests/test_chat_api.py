@@ -31,4 +31,4 @@ def test_post_chat_fan(client):
     assert response.status_code == 200
     json_data = response.json()
     assert json_data["mode"] == "fan"
-    assert "L'Avis du Virage" in json_data["answer"]
+    assert "L'Avis des Fans" in json_data["answer"]

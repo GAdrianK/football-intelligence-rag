@@ -129,56 +129,174 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
             sources=sources
         )
 
+    def _is_query_in_sources(self, query: str, sources: List[SourceReference]) -> bool:
+        """
+        Vérifie si la requête contient au moins un terme significatif présent dans les sources.
+        """
+        import re
+        # Normaliser et nettoyer la requête
+        query_clean = re.sub(r"[^\w\s-]", " ", query.lower())
+        query_tokens = [t for t in query_clean.split() if len(t) > 1]
+        
+        # Stop words français courants
+        stop_words = {
+            "le", "la", "les", "de", "des", "un", "une", "du", "en", "pour", "dans", "avec", 
+            "est", "sont", "ce", "c'est", "qu'est", "que", "qui", "qu", "comment", "pourquoi", 
+            "quelle", "quelles", "quel", "quels", "explique", "expliques", "moi", "nous", 
+            "vous", "je", "tu", "il", "elle", "ils", "elles", "mon", "ton", "son", "ma", "ta", 
+            "sa", "mes", "tes", "ses", "et", "ou", "mais", "donc", "or", "ni", "car", "sur", 
+            "se", "sa", "ses", "ce", "ces", "cette", "cet", "par", "aux", "au", "aussi", "faire",
+            "fait", "a", "ont", "avoir", "etre", "être"
+        }
+        
+        meaningful_tokens = [t for t in query_tokens if t not in stop_words]
+        
+        if not meaningful_tokens:
+            return False
+            
+        # Combiner le texte des sources pour la recherche
+        source_text_combined = " ".join([s.text.lower() for s in sources])
+        source_text_clean = re.sub(r"[^\w\s-]", " ", source_text_combined)
+        
+        for token in meaningful_tokens:
+            pattern = r'\b' + re.escape(token) + r'\b'
+            if re.search(pattern, source_text_clean):
+                return True
+                
+        return False
+
     def _generate_mock_response(self, mode: ChatMode, query: str, sources: List[SourceReference]) -> str:
         """
-        Génère une réponse simulée crédible en intégrant les données du RAG.
+        Génère une réponse simulée à partir des sources RAG sans inventer d'information.
         """
-        source_names = ", ".join(list(set([s.source for s in sources]))) if sources else "aucune"
-        top_text = ""
-        if sources:
-            # Extraire une ligne ou deux du premier chunk pour simuler l'intégration
-            lines = sources[0].text.split("\n")
-            # Ignorer le préfixe [...]
-            relevant_lines = [l for l in lines if not l.startswith("[") and l.strip()]
-            if relevant_lines:
-                top_text = relevant_lines[0]
+        if not sources or not self._is_query_in_sources(query, sources):
+            return "Je n’ai pas assez d’informations dans la base actuelle pour répondre précisément."
+            
+        import re
+        
+        # 1. Analyser et extraire les informations des sources
+        paragraphs = []
+        consignes = []
+        exercices = []
+        
+        for src in sources:
+            text = src.text
+            # Séparer le texte par lignes
+            lines = text.split("\n")
+            
+            content_lines = []
+            is_exercise_context = False
+            
+            for line in lines:
+                line_stripped = line.strip()
+                if not line_stripped:
+                    continue
+                if line_stripped.startswith("[") and line_stripped.endswith("]"):
+                    # C'est un header de métadonnées, on l'utilise pour savoir si c'est un exercice
+                    if any(kw in line_stripped.lower() for kw in ["séance d'entraînement", "exercice", "jeu final", "bloc"]):
+                        is_exercise_context = True
+                    continue
+                
+                content_lines.append(line)
+                
+            # Parcourir les lignes de contenu pour classer les éléments
+            for line in content_lines:
+                line_stripped = line.strip()
+                # Si c'est une puce ou liste
+                if line_stripped.startswith("*") or line_stripped.startswith("-") or (len(line_stripped) > 2 and line_stripped[0].isdigit() and line_stripped[1:3] == ". "):
+                    # Nettoyer la puce sans toucher aux marqueurs de gras markdown (**)
+                    cleaned_line = re.sub(r'^(\s*[\*\-]\s+|\s*\d+\.\s+)', '', line_stripped).strip()
+                    # Si c'est dans un contexte d'exercice ou contient des mots-clés d'exercice
+                    if is_exercise_context or any(kw in line_stripped.lower() for kw in ["structure :", "règles :", "objectif :"]):
+                        exercices.append(line_stripped)
+                    else:
+                        consignes.append(cleaned_line)
+                else:
+                    # C'est du texte normal/paragraphe (ignorer les titres de premier niveau)
+                    if not line_stripped.startswith("#"):
+                        paragraphs.append(line_stripped)
 
+        # Nettoyer et dédoublonner
+        consignes = list(dict.fromkeys(consignes))[:4]
+        exercices = list(dict.fromkeys(exercices))
+        
+        # Construire l'explication (Analyse) à partir des paragraphes
+        explanation = ""
+        if paragraphs:
+            # Filtrer pour ne garder que les lignes textuelles sans puces
+            clean_paragraphs = [p for p in paragraphs if not p.startswith("*") and not p.startswith("-")]
+            if clean_paragraphs:
+                explanation = "\n\n".join(clean_paragraphs[:2])
+            else:
+                explanation = "\n\n".join(paragraphs[:2])
+        
+        if not explanation:
+            if consignes:
+                explanation = " ".join(consignes[:2])
+            else:
+                explanation = "Principes tactiques documentés dans nos bases."
+                
+        # Limiter la longueur de l'explication et ajouter la référence
+        ref_suffix = f" (source: {sources[0].source})"
+        explanation = explanation + ref_suffix
+
+        # Formater selon le mode
         if mode == ChatMode.COACH:
+            # Section Exercice Recommandé
+            if exercices:
+                # Reconstruire la structure d'exercice proprement
+                exercice_text = "\n".join(exercices[:5])
+            else:
+                exercice_text = "[Aucun exercice spécifique n'est référencé dans notre base de données tactique pour ce sujet. Nous restons sur les principes de jeu généraux.]"
+                
+            # Section Consignes
+            if consignes:
+                consignes_text = "\n".join([f"{i+1}. {c}" for i, c in enumerate(consignes)])
+            else:
+                consignes_text = "1. Appliquer les principes de positionnement décrits dans les sources."
+                
             return f"""### 📋 Analyse du Coach
-Voici mon plan d'action pour aborder votre question : "{query}".
-En me basant sur nos principes tactiques (sources consultées : {source_names}), voici ce qu'il faut retenir :
-> {top_text if top_text else "Nous devons rester structurés et agressifs dans les zones définies."}
+{explanation}
 
-### 🏃‍♂️ Consignes Individuelles/Collectives
-1. **Pression immédiate** : Dès la perte, le joueur le plus proche cadre le porteur.
-2. **Compensation** : Les milieux axiaux coulissent pour fermer l'intérieur.
+### 🏃‍♂️ Consignes du Terrain
+{consignes_text}
 
-### ⚽ Exercice Recommandé sur le Terrain
-* **Jeu de transition 4 contre 4 + 3 jokers** sur terrain réduit (30x40m).
-* **Objectif** : Travailler la vitesse de réaction à la perte et la fermeture rapide des lignes de passes internes."""
+### ⚽ Exercice Recommandé
+{exercice_text}"""
 
         elif mode == ChatMode.ANALYST:
+            # Forces / Faiblesses
+            forces_faiblesses = []
+            for src in sources:
+                if any(kw in src.text.lower() for kw in ["avantages", "forces", "risques", "faiblesses", "perte", "panique", "isolement"]):
+                    for line in src.text.split("\n"):
+                        if any(k in line.lower() for k in ["avantage", "force", "risque", "faiblesse", "perte", "panique", "isolement"]):
+                            forces_faiblesses.append(line.strip())
+                            
+            if forces_faiblesses:
+                forces_text = "\n".join(forces_faiblesses[:3])
+            else:
+                forces_text = "[Non documenté spécifiquement dans les sources tactiques]"
+                
+            sources_list = "\n".join([f"- {name}" for name in list(dict.fromkeys([s.source for s in sources]))])
+            
             return f"""### 🔍 Observations Structurelles
-Analyse technique suite à votre requête : "{query}".
-Les données RAG extraites (fichiers : {source_names}) mettent en évidence les comportements structurels suivants :
-* **Animation principale** : {top_text if top_text else "Mise en place d'une structure géométrique rigoureuse."}
-* **Bloc de hauteur** : Déploiement d'un bloc médian compact garantissant la couverture des interlignes.
-
-### 📐 Schéma de Transition / Animation
-Lors de la phase active, l'équipe se réorganise en supériorité numérique axiale (structure de type double pivot).
+{explanation}
 
 ### ⚖️ Forces/Faiblesses du Système
-* **Force** : Excellente couverture des demi-espaces.
-* **Faiblesse** : Vulnérabilité sur les flancs en cas de transition rapide de l'adversaire."""
+{forces_text}
 
-        else: # Fan Passionné
-            return f"""### 📣 L'Avis du Virage
-Ah mon pote, parlons-en de ça : "{query}" !
-Dans les tribunes, on ne jure que par ça ! En plus, nos grimoires ({source_names}) le disent bien :
-"{top_text if top_text else "Il faut tout donner et mouiller le maillot !"}"
+### 📄 Fichiers tactiques analysés
+{sources_list}"""
 
-### ⭐️ Le Joueur Clé
-Notre numéro 6, un vrai guerrier qui ratisse tous les ballons au milieu et distribue proprement !
+        else: # Fan Passionné (vulgarisé sans caricature)
+            focus_parts = []
+            for c in consignes[:2]:
+                focus_parts.append(f"- {c}")
+            focus_text = "\n".join(focus_parts) if focus_parts else "[Non documenté spécifiquement dans les sources tactiques]"
+            
+            return f"""### 📣 L'Avis des Fans
+{explanation}
 
-### 🔥 La Tribune s'enflamme
-Si les gars appliquent ces consignes de pressing et se projettent vite vers l'avant, ça va chanter très fort dans le virage ! Allez, tous au stade !"""
+### ⭐️ Le Focus du Match
+{focus_text}"""
