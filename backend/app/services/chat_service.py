@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 from openai import OpenAI
 from app.core.config import settings
 from app.services.rag_engine import RAGEngine
+from app.services.query_classifier import QueryClassifier
 from app.schemas.chat import ChatMode, ChatRequest, ChatResponse, SourceReference
 
 # Dossier des prompts
@@ -18,6 +19,7 @@ class ChatService:
         self.rag_engine = rag_engine
         self.api_key = openai_api_key
         self.prompts: Dict[ChatMode, str] = {}
+        self.classifier = QueryClassifier()
         self._load_prompts()
 
     def _load_prompts(self):
@@ -54,8 +56,37 @@ class ChatService:
             return "Tu es un supporter passionné. Sois enthousiaste et familier."
 
     def generate_response(self, request: ChatRequest) -> ChatResponse:
-        # 1. Recherche RAG
-        search_results = self.rag_engine.search(request.message, top_k=3)
+        # 1. Classification de la requête
+        classification = self.classifier.classify(request.message)
+        
+        # 2. Routage selon le type de requête
+        if classification["type"] == "greeting":
+            # Salutation simple sans RAG
+            answer = "Salut ! Je suis Football IQ Assistant. Tu peux me demander une analyse tactique, une séance d'entraînement ou une explication football."
+            
+            if request.mode == ChatMode.COACH:
+                answer = "### 📋 Salut Coach !\nBienvenue dans votre espace tactique. Comment puis-je vous aider aujourd'hui ? Demandez-moi des schémas de relance, des séances d'entraînement spécifiques ou des consignes collectives."
+            elif request.mode == ChatMode.FAN:
+                answer = "### 📣 Salut l'ami !\nInstalle-toi bien dans le virage. De quelle tactique de légende ou de quel joueur clé veux-tu qu'on discute aujourd'hui ?"
+            elif request.mode == ChatMode.ANALYST:
+                answer = "### 🔍 Bonjour de la cabine d'analyse !\nPrêt à décortiquer les circuits de passes, les transitions rapides et l'organisation des blocs de jeu. Quelle phase souhaitez-vous étudier ?"
+                
+            return ChatResponse(
+                answer=answer,
+                mode=request.mode,
+                sources=[]
+            )
+            
+        elif classification["type"] == "out_of_scope":
+            # Hors-sujet sans RAG
+            return ChatResponse(
+                answer="Je n’ai pas assez d’informations dans la base actuelle pour répondre précisément.",
+                mode=request.mode,
+                sources=[]
+            )
+            
+        # 3. Recherche RAG guidée par l'intention
+        search_results = self.rag_engine.search(request.message, top_k=3, query_metadata=classification)
         
         # Formater les sources Pydantic
         sources = [

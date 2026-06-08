@@ -67,9 +67,9 @@ class RAGEngine:
         self.mode = "offline"
         print(f"Indexation locale réussie de {len(self.chunks)} chunks via TF-IDF.")
 
-    def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 3, query_metadata: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        Recherche sémantique des chunks les plus proches de la requête.
+        Recherche sémantique des chunks les plus proches de la requête avec scoring hybride par intentions.
         """
         if not self.chunks or not self.provider or not self.embeddings:
             return []
@@ -79,7 +79,6 @@ class RAGEngine:
             query_vector = self.provider.get_embedding(query)
         except Exception as e:
             print(f"Erreur lors du calcul d'embedding de la requête : {e}")
-            # Si plantage OpenAI à la requête, on peut essayer d'utiliser un backup ou retourner vide
             return []
 
         # Calculer le score de similarité pour chaque chunk
@@ -87,6 +86,33 @@ class RAGEngine:
         for idx, chunk in enumerate(self.chunks):
             chunk_vector = self.embeddings[idx]
             score = get_cosine_similarity(query_vector, chunk_vector)
+            
+            # Ajustement sémantique hybride
+            if query_metadata:
+                q_intent = query_metadata.get("intent", "general")
+                q_phase = query_metadata.get("phase", "general")
+                
+                chunk_intent = chunk["metadata"].get("intent", "general")
+                chunk_phase = chunk["metadata"].get("phase", "general")
+                
+                # Bonus/Pénalité d'Intention
+                if q_intent != "general" and chunk_intent != "general":
+                    if q_intent == chunk_intent:
+                        score += 0.15
+                    # Pénalités d'opposition directe (attack vs defend)
+                    elif (q_intent == "attack" and chunk_intent == "defend") or (q_intent == "defend" and chunk_intent == "attack"):
+                        score -= 0.35
+                        
+                # Bonus/Pénalité de Phase
+                if q_phase != "general" and chunk_phase != "general":
+                    if q_phase == chunk_phase:
+                        score += 0.10
+                    elif (q_phase == "offensive" and chunk_phase == "defensive") or (q_phase == "defensive" and chunk_phase == "offensive"):
+                        score -= 0.20
+            
+            # Clamping du score final
+            score = max(0.0, min(1.0, score))
+            
             results.append({
                 "text": chunk["text"],
                 "source": chunk["source"],

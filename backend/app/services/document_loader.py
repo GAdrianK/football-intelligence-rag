@@ -29,6 +29,45 @@ class MarkdownChunker:
             if not text:
                 return
             
+            # Déduction des métadonnées tactiques à partir du nom du fichier
+            src_lower = source_name.lower()
+            intent = "general"
+            phase = "general"
+            topic = "general"
+            
+            # Détection du sujet (Topic)
+            if "bloc_bas" in src_lower:
+                topic = "bloc_bas"
+            elif "pressing" in src_lower:
+                topic = "pressing"
+            elif "sortie_balle" in src_lower or "relance" in src_lower:
+                topic = "relance"
+            elif "roles" in src_lower or "role" in src_lower:
+                topic = "roles"
+            elif "formation" in src_lower:
+                topic = "formations"
+            elif "transition" in src_lower:
+                topic = "transitions"
+            elif "phase_offensive" in src_lower:
+                topic = "offensif"
+            elif "analyse_video" in src_lower:
+                topic = "video"
+                
+            # Détection de l'intention et de la phase
+            if "defend" in src_lower or "repli" in src_lower or "cpa_defensifs" in src_lower or ("bloc_bas" in src_lower and "desequilibrer" not in src_lower):
+                intent = "defend"
+                phase = "defensive"
+            elif "attack" in src_lower or "desequilibrer" in src_lower or "jeu_couloirs" in src_lower or "centres_surface" in src_lower or "fixation_axiale" in src_lower or "sortie_balle" in src_lower or "relance" in src_lower or "jeu_direct" in src_lower:
+                intent = "attack"
+                phase = "offensive"
+            elif "transition" in src_lower or "pressing" in src_lower:
+                intent = "transition"
+                phase = "transition"
+            elif "roles" in src_lower:
+                intent = "roles"
+            elif "formation" in src_lower:
+                intent = "formations"
+            
             # Construire un en-tête contextuel pour le RAG
             context_prefix = f"[{doc_title}"
             if sec:
@@ -44,7 +83,10 @@ class MarkdownChunker:
                     "document_title": doc_title,
                     "section": sec,
                     "subsection": subsec,
-                    "word_count": len(text.split())
+                    "word_count": len(text.split()),
+                    "intent": intent,
+                    "phase": phase,
+                    "topic": topic
                 }
             })
 
