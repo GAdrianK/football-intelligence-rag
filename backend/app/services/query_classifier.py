@@ -121,5 +121,91 @@ class QueryClassifier:
         return {
             "type": "tactical_question",
             "intent": detected_intent,
-            "phase": detected_phase
+            "phase": detected_phase,
+            "entities": self.extract_tactical_entities(message)
         }
+
+    def extract_tactical_entities(self, text: str) -> Dict[str, Any]:
+        """
+        Extrait les entités tactiques clés de la requête (formation, problem, phase, goal).
+        """
+        msg_lower = text.lower().strip()
+        
+        # 1. Extraction de la formation
+        formation = None
+        formations_patterns_hyphens = [
+            r"4-3-3", r"3-5-2", r"4-4-2", r"3-4-3", r"3-2-4-1", r"4-2-3-1", r"5-4-1", r"4-1-4-1"
+        ]
+        for pattern in formations_patterns_hyphens:
+            if re.search(r"\b" + pattern + r"\b", msg_lower):
+                formation = pattern
+                break
+        
+        if not formation:
+            formations_no_hyphens = {
+                "433": "4-3-3",
+                "352": "3-5-2",
+                "442": "4-4-2",
+                "343": "3-4-3",
+                "3241": "3-2-4-1",
+                "4231": "4-2-3-1",
+                "541": "5-4-1",
+                "4141": "4-1-4-1"
+            }
+            for raw, normalized in formations_no_hyphens.items():
+                if re.search(r"\b" + raw + r"\b", msg_lower):
+                    formation = normalized
+                    break
+
+        # 2. Extraction du problème
+        problem = None
+        problem_keywords = {
+            "pertes de balle": ["perdre", "perte", "perd", "déchet", "dechet"],
+            "manque d'occasions": ["occasion", "creer", "créer"],
+            "difficulté à défendre": ["defend", "défend", "buts", "encaiss", "transperce", "subit", "dédoubl", "dedoubl"],
+            "manque d'intensité": ["intensité", "intensite", "physique", "fatigue", "epuis", "épuis"],
+            "erreurs": ["erreur", "faute", "bavure"],
+            "isolement": ["isol"]
+        }
+        for category, keywords in problem_keywords.items():
+            if any(kw in msg_lower for kw in keywords):
+                problem = category
+                break
+
+        # 3. Extraction de la phase de jeu
+        phase = None
+        phase_keywords = {
+            "relance": ["relance", "construction", "sortie de balle", "sortie de press", "ressortir", "build-up", "build up", "relancent", "sortie_balle"],
+            "pressing": ["pressing", "contre-press", "gegenpress", "chasser", "harcel", "presser haut"],
+            "transition": ["transition", "contre-attaq", "contre", "repli", "contre-defens", "rest defense", "défense préventive"],
+            "bloc bas": ["bloc bas", "bloc-bas", "defendre bas", "défendre bas", "entre les lignes", "interlignes"],
+            "attaque placée": ["attaque placee", "attaque placée", "possession", "circul"],
+            "finition": ["finition", "marquer", "tirer", "centre", "devant le but", "surface"]
+        }
+        for category, keywords in phase_keywords.items():
+            if any(kw in msg_lower for kw in keywords):
+                phase = category
+                break
+
+        # 4. Extraction du but/goal
+        goal = None
+        goal_keywords = {
+            "améliorer": ["ameliorer", "améliorer", "optimiser", "perfectionner", "developper", "développer"],
+            "corriger": ["corriger", "eviter", "éviter", "resoudre", "résoudre", "que faire", "comment faire", "remédier", "remedier", "n’arrive pas", "arrive pas"],
+            "préparer": ["preparer", "préparer", "entrainer", "entraîner", "seance", "séance", "exercice"],
+            "comprendre": ["comprendre", "expliquer", "c'est quoi", "qu'est-ce que", "analyse", "difference", "différence"],
+            "défendre": ["defendre", "défendre", "bloquer", "intercepter", "empecher", "empêcher", "coulisser"],
+            "attaquer": ["attaquer", "percer", "passer", "trouver le", "marquer"]
+        }
+        for category, keywords in goal_keywords.items():
+            if any(kw in msg_lower for kw in keywords):
+                goal = category
+                break
+
+        return {
+            "formation": formation,
+            "problem": problem,
+            "phase": phase,
+            "goal": goal
+        }
+
