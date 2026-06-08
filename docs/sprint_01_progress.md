@@ -8,17 +8,17 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![60%](https://geps.dev/progress/60) **60%** (6 / 10 tâches) | T-01 à T-06 complétés et validés. |
+| **Progression Globale** | ![70%](https://geps.dev/progress/70) **70%** (7 / 10 tâches) | T-01 à T-07 complétés et validés. |
 | **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **19 heures** | Base de connaissances, API FastAPI, RAG, ChatService et Générateur PDF opérationnels. |
+| **Temps Réel Consommé** | **23 heures** | Base de connaissances, API, RAG, ChatService, Générateur PDF et Frontend Layout complétés. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 07 : Interface Frontend CSS Premium & Layout HTML** | Concevoir la structure de l'application et sa charte graphique moderne. |
+| **Prochaine Tâche** | **📌 Tâche 08 : Logique de Chat & Connexion API** | Connecter l'interface de chat à l'API backend pour la génération en temps réel. |
 
 ---
 
 ## 📦 2. Avancement par Bloc
 
-### 📂 Bloc A : Connaissance Tactique (Jours 1 - 15)
+    ### 📂 Bloc A : Connaissance Tactique (Jours 1 - 15)
 - **Progression :** 100% (2 / 2 tâches terminées)
 - **Temps :** 6h consommées / 6h estimées
 
@@ -27,8 +27,8 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 - **Temps :** 13h consommées / 13h estimées
 
 ### 🎨 Bloc C : Frontend Conversationnel (Jours 26 - 32)
-- **Progression :** 0% (0 / 3 tâches terminées)
-- **Temps :** 0h consommées / 11h estimées
+- **Progression :** 33% (1 / 3 tâches terminées)
+- **Temps :** 4h consommées / 11h estimées
 
 ### 🚀 Bloc D : Stabilisation & Déploiement (Jours 33 - 35)
 - **Progression :** 0% (0 / 1 tâche terminée)
@@ -46,7 +46,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `DONE` | Critique | 4h | 4h | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
 | **T-05** | B | Moteur de Chat & Prompts Système | `DONE` | Critique | 4h | 4h | T-04 | Précision tactique de la réponse du modèle |
 | **T-06** | B | Générateur de Rapports PDF Tactiques | `DONE` | Haute | 3h | 3h | T-03 | Mise en page ReportLab / débordement de page |
-| **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `TODO` | Haute | 4h | - | Aucune | Intégration Tailwind CDN vs CSS Custom |
+| **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `DONE` | Haute | 4h | 4h | Aucune | Aucune |
 | **T-08** | C | Logique de Chat & Connexion API | `TODO` | Critique | 4h | - | T-05, T-07 | Gestion du streaming de texte en vanilla JS |
 | **T-09** | C | Persistence Locale & Actions Rapides | `TODO` | Haute | 3h | - | T-06, T-08 | Limites de taille de localStorage |
 | **T-10** | D | Tests d'Intégration & Configuration Déploiement | `TODO` | Moyenne | 3h | - | Tous | Configuration CORS en production sur Render/Railway |
