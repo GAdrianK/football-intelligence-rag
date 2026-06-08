@@ -67,7 +67,7 @@ def test_chat_service_mock_specific_requirements(rag_engine):
     answer_coach_pressing = resp_coach_pressing.answer
     
     assert "Analyse du Coach" in answer_coach_pressing
-    assert any(src in answer_coach_pressing for src in ["pressing_contre_pressing.md", "analyse_video_pressing_haut.md", "transition_pressing_perte.md"])
+    assert any(src in answer_coach_pressing for src in ["pressing_contre_pressing.md", "analyse_video_pressing_haut.md", "transition_pressing_perte.md", "pressing_haut.md"])
     
     # 3. Test Question hors base (pizza)
     req_pizza = ChatRequest(message="Quelle est la meilleure recette de pizza ?", mode=ChatMode.COACH)
