@@ -811,3 +811,50 @@ h1, h2, h3, h4, h5, h6 {
         padding: 12px 20px 20px;
     }
 }
+
+/* Typing Indicator Animation */
+.typing-indicator {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    padding: 6px 10px;
+}
+
+.typing-indicator span {
+    width: 7px;
+    height: 7px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% { 
+        transform: scale(0);
+        opacity: 0.3;
+    } 
+    40% { 
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Error message design custom layout */
+.error-message {
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    background-color: rgba(239, 68, 68, 0.03) !important;
+}
+
+.error-title {
+    color: #f87171 !important;
+    font-weight: 600;
+}
+
