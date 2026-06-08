@@ -217,10 +217,46 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.innerHTML = `<span>⏳ Génération...</span>`;
 
         try {
+            // Build a valid PDFExportRequest payload from the response text
+            // Split by ### headers to create individual blocks
+            const modeLabel = { coach: 'Coach', analyst: 'Analyste', fan: 'Fan' }[currentSession.mode] || 'Assistant';
+            const lines = rawContent.split('\n');
+            const blocks = [];
+            let currentBlockTitle = 'Réponse tactique';
+            let currentBlockLines = [];
+
+            for (const line of lines) {
+                const stripped = line.trim();
+                if (stripped.startsWith('### ') || stripped.startsWith('## ')) {
+                    // Save previous block if it has content
+                    if (currentBlockLines.length > 0) {
+                        blocks.push({ title: currentBlockTitle, content: currentBlockLines.join('\n').trim() });
+                        currentBlockLines = [];
+                    }
+                    currentBlockTitle = stripped.replace(/^#{2,3}\s+/, '');
+                } else if (stripped) {
+                    currentBlockLines.push(stripped);
+                }
+            }
+            // Save last block
+            if (currentBlockLines.length > 0) {
+                blocks.push({ title: currentBlockTitle, content: currentBlockLines.join('\n').trim() });
+            }
+            // Fallback if no blocks were created
+            if (blocks.length === 0) {
+                blocks.push({ title: 'Analyse', content: rawContent.trim() });
+            }
+
+            const payload = {
+                title: `Fiche tactique — Mode ${modeLabel}`,
+                coach: 'Football IQ Assistant',
+                blocks: blocks
+            };
+
             const response = await fetch(`${API_BASE_URL}/api/export-pdf`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: rawContent, mode: currentSession.mode })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) throw new Error(`Statut ${response.status}`);
