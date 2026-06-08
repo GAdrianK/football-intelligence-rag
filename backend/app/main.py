@@ -2,12 +2,16 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.services.rag_engine import RAGEngine
+from app.api.chat import router as chat_router
 
 app = FastAPI(
     title="Football IQ Assistant API",
     description="API du Football IQ Assistant - Phase 1 MVP",
     version="1.0.0"
 )
+
+# Enregistrer les routeurs
+app.include_router(chat_router)
 
 # Configuration CORS pour autoriser le frontend (local ou distant)
 app.add_middleware(
