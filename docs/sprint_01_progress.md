@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![40%](https://geps.dev/progress/40) **40%** (4 / 10 tâches) | T-01, T-02, T-03 et T-04 complétés et validés. |
+| **Progression Globale** | ![50%](https://geps.dev/progress/50) **50%** (5 / 10 tâches) | T-01 à T-05 complétés et validés. |
 | **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **12 heures** | Fiches tactiques A et B, squelette API et moteur RAG en mémoire. |
+| **Temps Réel Consommé** | **16 heures** | Base de connaissances, API FastAPI, moteur RAG et ChatService en place. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 05 : Moteur de Chat & Prompts Système** | Implémenter le service de chat avec historique et prompts système. |
+| **Prochaine Tâche** | **📌 Tâche 06 : Générateur de Rapports PDF Tactiques** | Implémenter le service de génération de PDF pour exporter les fiches. |
 
 ---
 
@@ -23,8 +23,8 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 - **Temps :** 6h consommées / 6h estimées
 
 ### 🖥️ Bloc B : Infrastructure & Backend (Jours 16 - 25)
-- **Progression :** 50% (2 / 4 tâches terminées)
-- **Temps :** 6h consommées / 13h estimées
+- **Progression :** 75% (3 / 4 tâches terminées)
+- **Temps :** 10h consommées / 13h estimées
 
 ### 🎨 Bloc C : Frontend Conversationnel (Jours 26 - 32)
 - **Progression :** 0% (0 / 3 tâches terminées)
@@ -44,7 +44,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-02** | A | Base de Connaissances - Pressing & Rôles | `DONE` | Critique | 3h | 3h | T-01 | Aucune |
 | **T-03** | B | Setup de l'Environnement Backend & FastAPI | `DONE` | Critique | 2h | 2h | Aucune | Versioning de python-dotenv / Pydantic v2 |
 | **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `DONE` | Critique | 4h | 4h | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
-| **T-05** | B | Moteur de Chat & Prompts Système | `TODO` | Critique | 4h | - | T-04 | Précision tactique de la réponse du modèle |
+| **T-05** | B | Moteur de Chat & Prompts Système | `DONE` | Critique | 4h | 4h | T-04 | Précision tactique de la réponse du modèle |
 | **T-06** | B | Générateur de Rapports PDF Tactiques | `TODO` | Haute | 3h | - | T-03 | Mise en page ReportLab / débordement de page |
 | **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `TODO` | Haute | 4h | - | Aucune | Intégration Tailwind CDN vs CSS Custom |
 | **T-08** | C | Logique de Chat & Connexion API | `TODO` | Critique | 4h | - | T-05, T-07 | Gestion du streaming de texte en vanilla JS |
@@ -75,16 +75,16 @@ stateDiagram-v2
 
 ## 🔍 5. Focus Tâche Recommandée
 
-### [T-05] Moteur de Chat & Prompts Système
-- **Description :** Implémenter le service de chat intégrant l'historique conversationnel de l'utilisateur, la sélection dynamique du mode d'assistance (Coach tactique, Analyste technique, Fan passionné) et l'injection automatique des chunks RAG récupérés dans le prompt système d'OpenAI.
+### [T-06] Générateur de Rapports PDF Tactiques
+- **Description :** Implémenter le service de génération de rapports PDF tactiques personnalisés en utilisant la bibliothèque `reportlab`. Le rapport doit intégrer les analyses issues de la conversation de chat et le contexte tactique sous un format exportable et esthétique.
 - **Fichiers concernés :**
-  - `backend/app/services/chat_service.py` (Nouveau)
-  - `backend/tests/test_chat_service.py` (Nouveau)
-  - `backend/app/api/chat.py` (Nouveau)
+  - `backend/app/services/pdf_generator.py` (Nouveau)
+  - `backend/tests/test_pdf_generator.py` (Nouveau)
+  - `backend/app/api/pdf.py` (Nouveau)
 - **Critères de validation :**
-  - Les réponses de l'IA intègrent des citations et sources issues des chunks RAG.
-  - L'historique des échanges est conservé et pris en compte par le modèle de chat.
-  - La route `POST /api/chat` renvoie une réponse textuelle cohérente.
+  - Un fichier PDF binaire valide est généré sans plantage.
+  - La mise en page du rapport est structurée (en-tête, tableau récapitulatif, blocs de texte).
+  - L'API expose un endpoint `/api/pdf/generate` retournant le flux binaire du PDF avec les en-têtes HTTP appropriés.
 
 ---
 
