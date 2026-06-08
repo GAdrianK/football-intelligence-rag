@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     def get_kb_dir(self) -> str:
         if self.KNOWLEDGE_BASE_DIR:
             return self.KNOWLEDGE_BASE_DIR
-        return os.path.abspath(os.path.join(BASE_DIR.parent, "football-rag-system/data_football/knowledge_base"))
+        return os.path.abspath(os.path.join(BASE_DIR.parent, "knowledge_base"))
 
     # Recherche le fichier .env dans le dossier racine du backend
     model_config = SettingsConfigDict(
