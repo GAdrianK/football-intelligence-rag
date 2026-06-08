@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![95%](https://geps.dev/progress/95) **95%** (10 / 11 tâches) | T-09 Persistence & Actions Rapides complété. |
+| **Progression Globale** | ![100%](https://geps.dev/progress/100) **100%** (11 / 11 tâches) | Sprint 01 complété — MVP V1 validé et documenté. |
 | **Temps Total Estimé** | **38 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **33 heures** | localStorage, Copier, Simplifier, Approfondir, Export PDF implémentés. |
+| **Temps Réel Consommé** | **35 heures** | README, demo script, known limitations, .env.example, tests 18/18 stables. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 10 : Tests d'Intégration & Déploiement** | CORS production, tests end-to-end, configuration Render/Railway. |
+| **Prochaine Tâche** | **🚀 Sprint 02 — Déploiement & Améliorations** | OpenAI, CORS, déploiement Render/Railway, mémoire long-terme. |
 
 ---
 
@@ -50,7 +50,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-08** | C | Logique de Chat & Connexion API | `DONE` | Critique | 4h | 4h | T-05, T-07 | Aucune |
 | **T-08.5** | C | Query Understanding & RAG Quality Fix + Session UX | `DONE` | Haute | 2h | 2h | T-08 | Aucune |
 | **T-09** | C | Persistence Locale & Actions Rapides | `DONE` | Haute | 3h | 3h | T-06, T-08 | Aucune |
-| **T-10** | D | Tests d'Intégration & Configuration Déploiement | `TODO` | Moyenne | 3h | - | Tous | Configuration CORS en production sur Render/Railway |
+| **T-10** | D | Stabilisation & Démo MVP | `DONE` | Haute | 3h | 2h | Tous | Aucune |
 
 ---
 
