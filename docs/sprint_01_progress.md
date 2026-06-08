@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![20%](https://geps.dev/progress/20) **20%** (2 / 10 tâches) | T-01 et T-02 validés et complétés. |
+| **Progression Globale** | ![30%](https://geps.dev/progress/30) **30%** (3 / 10 tâches) | T-01, T-02 et T-03 complétés et validés. |
 | **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **6 heures** | Relatif à la rédaction des fiches tactiques T-01 et T-02. |
+| **Temps Réel Consommé** | **8 heures** | Fiches tactiques A et B, et initialisation de l'API FastAPI. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 03 : Setup de l'Environnement Backend & FastAPI** | Configurer l'environnement Python et FastAPI. |
+| **Prochaine Tâche** | **📌 Tâche 04 : Ingesteur RAG Local & Index en Mémoire** | Implémenter l'ingestion de la base de connaissances tactique. |
 
 ---
 
@@ -23,8 +23,8 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 - **Temps :** 6h consommées / 6h estimées
 
 ### 🖥️ Bloc B : Infrastructure & Backend (Jours 16 - 25)
-- **Progression :** 0% (0 / 4 tâches terminées)
-- **Temps :** 0h consommées / 13h estimées
+- **Progression :** 25% (1 / 4 tâches terminées)
+- **Temps :** 2h consommées / 13h estimées
 
 ### 🎨 Bloc C : Frontend Conversationnel (Jours 26 - 32)
 - **Progression :** 0% (0 / 3 tâches terminées)
@@ -42,7 +42,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **T-01** | A | Base de Connaissances - Bloc Bas & Sortie | `DONE` | Critique | 3h | 3h | Aucune | Aucune |
 | **T-02** | A | Base de Connaissances - Pressing & Rôles | `DONE` | Critique | 3h | 3h | T-01 | Aucune |
-| **T-03** | B | Setup de l'Environnement Backend & FastAPI | `IN_PROGRESS` | Critique | 2h | - | Aucune | Versioning de python-dotenv / Pydantic v2 |
+| **T-03** | B | Setup de l'Environnement Backend & FastAPI | `DONE` | Critique | 2h | 2h | Aucune | Versioning de python-dotenv / Pydantic v2 |
 | **T-04** | B | Ingesteur RAG Local & Index en Mémoire | `TODO` | Critique | 4h | - | T-02, T-03 | Limites de tokens ou de coûts d'API OpenAI |
 | **T-05** | B | Moteur de Chat & Prompts Système | `TODO` | Critique | 4h | - | T-04 | Précision tactique de la réponse du modèle |
 | **T-06** | B | Générateur de Rapports PDF Tactiques | `TODO` | Haute | 3h | - | T-03 | Mise en page ReportLab / débordement de page |
@@ -75,15 +75,14 @@ stateDiagram-v2
 
 ## 🔍 5. Focus Tâche Recommandée
 
-### [T-03] Setup de l'Environnement Backend & FastAPI
-- **Description :** Initialiser le projet backend FastAPI. Configurer les variables d'environnement (`.env` pour les clés API OpenAI) et déclarer la structure des répertoires de l'API.
+### [T-04] Ingesteur RAG Local & Index en Mémoire
+- **Description :** Implémenter le chargeur de documents tactiques markdown de la base de connaissances. Créer l'indexation sémantique en mémoire (sans base de données vectorielle complexe pour le MVP) en utilisant les API d'embeddings d'OpenAI.
 - **Fichiers concernés :**
-  - `backend/requirements.txt` (Nouveau)
-  - `backend/app/main.py` (Nouveau)
-  - `backend/app/config.py` (Nouveau)
+  - `backend/app/services/rag_service.py` (Nouveau)
+  - `backend/tests/test_rag.py` (Nouveau)
 - **Critères de validation :**
-  - L'API démarre localement sans erreur via `uvicorn app.main:app --reload`.
-  - La route `GET /api/health` renvoie un JSON de santé valide (`{"status": "healthy"}`).
+  - Les fichiers MD de la base de connaissances sont parsés et découpés en chunks sémantiques.
+  - La recherche sémantique renvoie les chunks les plus proches avec leur score de similarité cosinus.
 
 ---
 
