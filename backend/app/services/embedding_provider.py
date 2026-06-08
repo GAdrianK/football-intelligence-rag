@@ -54,7 +54,18 @@ class TFIDFEmbeddingProvider(EmbeddingProvider):
         # Lowercase et suppression de la ponctuation de base
         text_clean = re.sub(r'[^\w\s-]', ' ', text.lower())
         # Découper par mot
-        tokens = [token for token in text_clean.split() if len(token) > 1]
+        tokens = []
+        for token in text_clean.split():
+            if len(token) > 1:
+                tokens.append(token)
+                # Si le token contient des tirets et ressemble à une formation (ex: 4-3-3)
+                if '-' in token and re.match(r'^\d+(-\d+)+$', token):
+                    normalized = token.replace('-', '')
+                    tokens.append(normalized)
+                # Si le token est composé uniquement de chiffres et ressemble à une formation sans tiret (ex: 433, 442, 4231, 352)
+                elif token.isdigit() and len(token) in [3, 4]:
+                    with_hyphens = "-".join(list(token))
+                    tokens.append(with_hyphens)
         return tokens
 
     def fit(self, documents: List[str]):

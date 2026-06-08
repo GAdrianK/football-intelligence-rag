@@ -53,7 +53,9 @@ class QueryClassifier:
                 "raumdeuter", "inside forward", "piston"
             ],
             "formations": [
-                "4-3-3", "3-5-2", "4-4-2", "3-4-3", "3-2-4-1", "système", "systeme", "formation"
+                "4-3-3", "3-5-2", "4-4-2", "3-4-3", "3-2-4-1", "4-2-3-1",
+                "433", "352", "442", "343", "3241", "4231",
+                "système", "systeme", "formation"
             ]
         }
 

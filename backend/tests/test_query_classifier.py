@@ -31,3 +31,15 @@ def test_tactical_question_classification():
     res = classifier.classify("Explique-moi ce qu'est un faux 9")
     assert res["type"] == "tactical_question"
     assert res["intent"] == "roles"
+
+def test_formation_variations_classification():
+    classifier = QueryClassifier()
+    res1 = classifier.classify("Quelle différence entre 4-3-3 et 4-4-2 ?")
+    assert res1["intent"] == "formations"
+    
+    res2 = classifier.classify("Comment jouer en 433 ?")
+    assert res2["intent"] == "formations"
+
+    res3 = classifier.classify("Avantages du 4231 ?")
+    assert res3["intent"] == "formations"
+
