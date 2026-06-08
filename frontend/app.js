@@ -4,9 +4,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'http://127.0.0.1:8000' 
         : '';
 
-    // State
-    let currentMode = 'coach';
-    let messageHistory = [];
+    // Session State
+    let currentSession = {
+        mode: 'coach',
+        messages: []
+    };
 
     // Selectors
     const modeCards = document.querySelectorAll('.mode-card');
@@ -14,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatInput = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-message-btn');
     const messagesContainer = document.getElementById('chat-messages-container');
+    const newSessionBtn = document.querySelector('.new-chat-btn');
     
     // Mobile Sidebar Elements
     const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
@@ -35,6 +38,54 @@ document.addEventListener('DOMContentLoaded', () => {
             placeholder: "Posez votre question de supporter..."
         }
     };
+
+    // --- Session Management ---
+
+    /**
+     * Resets the chat UI for a given mode.
+     * Clears messages, resets history, shows the welcome message for the mode.
+     * @param {string} mode - 'coach' | 'analyst' | 'fan'
+     */
+    function resetSession(mode) {
+        currentSession = { mode: mode, messages: [] };
+
+        // Clear DOM
+        if (messagesContainer) {
+            messagesContainer.innerHTML = '';
+        }
+
+        // Reset textarea
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = '38px';
+            chatInput.disabled = false;
+        }
+        if (sendBtn) sendBtn.disabled = false;
+
+        // Show mode welcome message
+        const config = modeConfigs[mode];
+        if (!config) return;
+
+        if (chatInput) chatInput.placeholder = config.placeholder;
+
+        const welcomeWrapper = document.getElementById('welcome-message-wrapper');
+        if (welcomeWrapper && welcomeText) {
+            welcomeWrapper.style.opacity = '0';
+            welcomeWrapper.style.transform = 'translateY(5px)';
+            setTimeout(() => {
+                welcomeText.innerHTML = config.welcome.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                welcomeWrapper.style.opacity = '1';
+                welcomeWrapper.style.transform = 'translateY(0)';
+            }, 150);
+        }
+
+        // Inject welcome bubble into chat
+        const welcomeBubble = createMessageElement('assistant', config.welcome);
+        welcomeBubble.classList.add('welcome-bubble');
+        if (messagesContainer) {
+            messagesContainer.appendChild(welcomeBubble);
+        }
+    }
 
     // --- Helpers ---
 
@@ -279,8 +330,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const payload = {
                 message: query,
-                mode: currentMode,
-                history: messageHistory
+                mode: currentSession.mode,
+                history: currentSession.messages
             };
             
             const response = await fetch(`${API_BASE_URL}/api/chat`, {
@@ -305,9 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const assistantMsgEl = createMessageElement('assistant', data.answer, data.sources);
             messagesContainer.appendChild(assistantMsgEl);
             
-            // Save inside history
-            messageHistory.push({ role: 'user', content: query });
-            messageHistory.push({ role: 'assistant', content: data.answer });
+            // Save inside session history
+            currentSession.messages.push({ role: 'user', content: query });
+            currentSession.messages.push({ role: 'assistant', content: data.answer });
             
         } catch (error) {
             console.error('Erreur API Chat:', error);
@@ -331,32 +382,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners ---
 
-    // 1. Switch Mode Handler
+    // 1. Switch Mode Handler — resets chat on mode change
     modeCards.forEach(card => {
         card.addEventListener('click', () => {
+            const newMode = card.getAttribute('data-mode');
+            if (newMode === currentSession.mode) return; // Same mode clicked, do nothing
+
             modeCards.forEach(c => c.classList.remove('active'));
             card.classList.add('active');
-            
-            const mode = card.getAttribute('data-mode');
-            currentMode = mode;
-            const config = modeConfigs[mode];
-            
-            if (config) {
-                const welcomeWrapper = document.getElementById('welcome-message-wrapper');
-                if (welcomeWrapper) {
-                    welcomeWrapper.style.opacity = '0';
-                    welcomeWrapper.style.transform = 'translateY(5px)';
-                    
-                    setTimeout(() => {
-                        welcomeText.innerHTML = config.welcome.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                        chatInput.placeholder = config.placeholder;
-                        welcomeWrapper.style.opacity = '1';
-                        welcomeWrapper.style.transform = 'translateY(0)';
-                    }, 200);
-                }
-            }
+
+            resetSession(newMode);
         });
     });
+
+    // 2. New Session Button Handler — resets chat, keeps current mode
+    if (newSessionBtn) {
+        newSessionBtn.addEventListener('click', () => {
+            resetSession(currentSession.mode);
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768 && appSidebar) {
+                appSidebar.classList.remove('open');
+            }
+        });
+    }
 
     // 2. Auto-grow Textarea Input
     if (chatInput) {
@@ -408,5 +456,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Startup initialization ---
+    resetSession(currentSession.mode); // Show coach welcome on load
     checkHealth();
 });

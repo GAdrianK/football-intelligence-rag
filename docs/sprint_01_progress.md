@@ -8,11 +8,11 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 
 | Indicateur | Valeur | Commentaires |
 | :--- | :--- | :--- |
-| **Progression Globale** | ![80%](https://geps.dev/progress/80) **80%** (8 / 10 tâches) | T-01 à T-08 complétés et validés. |
-| **Temps Total Estimé** | **33 heures** | Estimation cumulée pour un développeur solo. |
-| **Temps Réel Consommé** | **27 heures** | Base de connaissances, API, RAG, ChatService, Générateur PDF, Frontend Layout et Chat Connexion complétés. |
+| **Progression Globale** | ![90%](https://geps.dev/progress/90) **90%** (9 / 10 tâches) | T-01 à T-08 + T-08.5 complétés et validés. |
+| **Temps Total Estimé** | **35 heures** | Estimation cumulée pour un développeur solo. |
+| **Temps Réel Consommé** | **30 heures** | RAG Quality Fix + Session UX frontend complétés. |
 | **Rendement (Réel/Est.)**| **100%** | Alignement parfait sur les estimations initiales. |
-| **Prochaine Tâche** | **📌 Tâche 09 : Persistence Locale & Actions Rapides** | Implémenter localStorage pour le chat et connecter le bouton d'export PDF. |
+| **Prochaine Tâche** | **📌 Tâche 09 : Tests d'Intégration & Déploiement** | Finaliser les tests end-to-end et préparer CORS pour production. |
 
 ---
 
@@ -48,6 +48,7 @@ Ce document sert au pilotage quotidien de l'exécution du **Sprint 01**. Il perm
 | **T-06** | B | Générateur de Rapports PDF Tactiques | `DONE` | Haute | 3h | 3h | T-03 | Mise en page ReportLab / débordement de page |
 | **T-07** | C | Interface Frontend CSS Premium & Layout HTML | `DONE` | Haute | 4h | 4h | Aucune | Aucune |
 | **T-08** | C | Logique de Chat & Connexion API | `DONE` | Critique | 4h | 4h | T-05, T-07 | Aucune |
+| **T-08.5** | C | Query Understanding & RAG Quality Fix + Session UX | `DONE` | Haute | 2h | 2h | T-08 | Aucune |
 | **T-09** | C | Persistence Locale & Actions Rapides | `TODO` | Haute | 3h | - | T-06, T-08 | Limites de taille de localStorage |
 | **T-10** | D | Tests d'Intégration & Configuration Déploiement | `TODO` | Moyenne | 3h | - | Tous | Configuration CORS en production sur Render/Railway |
 
