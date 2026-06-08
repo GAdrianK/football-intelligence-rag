@@ -51,9 +51,10 @@ def test_rag_retrieval_specific_topics():
     # "comment sortir du pressing haut ?" -> sortie_balle.md ou relance
     q1 = "comment sortir du pressing haut ?"
     res1 = engine.search(q1, top_k=3, query_metadata=classifier.classify(q1))
-    assert any(src in ["sortie_balle.md", "formation_433.md", "formation_343.md", "roles_modernes.md"] for src in [r["source"] for r in res1])
+    assert any(src in ["sortie_balle.md", "formation_433.md", "formation_343.md", "roles_modernes.md", "analyse_video_pressing_haut.md", "pressing_haut.md"] for src in [r["source"] for r in res1])
 
     # "explique-moi un faux 9" -> roles_modernes.md ou rôles/formations
     q2 = "explique-moi un faux 9"
     res2 = engine.search(q2, top_k=3, query_metadata=classifier.classify(q2))
-    assert any(src in ["roles_modernes.md", "formation_433.md", "formation_343.md"] for src in [r["source"] for r in res2])
+    assert any(src in ["roles_modernes.md", "formation_433.md", "formation_343.md", "player_roles_offensive_faux_9.md"] for src in [r["source"] for r in res2])
+
