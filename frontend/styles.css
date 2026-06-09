@@ -901,3 +901,194 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     letter-spacing: 0.01em;
 }
+
+/* =============================================================
+   TACTICAL REPORT DASHBOARD (PREMIUM GLASSMORPHISM & GRID)
+   ============================================================= */
+
+.tactical-report-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    color: var(--text-main);
+    font-family: var(--font-body);
+}
+
+.report-header {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.04));
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+}
+
+.report-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent-green);
+    background-color: rgba(16, 185, 129, 0.12);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+
+.report-header h3 {
+    font-size: 18px;
+    margin: 4px 0 6px 0;
+    color: var(--text-main);
+    font-family: var(--font-heading);
+}
+
+.report-subject {
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.report-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.report-card {
+    background-color: rgba(30, 41, 59, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.report-card:hover {
+    background-color: rgba(30, 41, 59, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.card-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 13.5px;
+    color: var(--accent-green);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.card-detail-item {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-main);
+}
+
+.card-detail-item strong {
+    color: var(--text-muted);
+}
+
+.report-section-full {
+    background-color: rgba(30, 41, 59, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.section-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--accent-blue);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.players-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.player-card {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.player-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-main);
+}
+
+.player-info-text {
+    font-size: 11.5px;
+    color: var(--text-main);
+    margin-top: 4px;
+}
+
+.player-info-text strong {
+    color: var(--text-muted);
+}
+
+.player-info-text.warnings {
+    color: #f87171;
+    background-color: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    padding: 6px;
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.recommendations-section {
+    border-color: rgba(59, 130, 246, 0.25);
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.15), rgba(59, 130, 246, 0.03));
+}
+
+.recs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rec-work-axes {
+    font-size: 12.5px;
+}
+
+.rec-work-axes strong {
+    color: var(--text-main);
+}
+
+.rec-work-axes ul {
+    margin-left: 20px;
+    margin-top: 6px;
+}
+
+.rec-work-axes li {
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.rec-drill {
+    background-color: rgba(16, 185, 129, 0.03);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+}
+
+.rec-drill strong {
+    color: var(--accent-green);
+    display: block;
+    margin-bottom: 4px;
+}
+

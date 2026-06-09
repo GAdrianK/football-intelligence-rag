@@ -9,9 +9,9 @@
 
 | Indicateur | Valeur |
 | :--- | :--- |
-| **Progression Globale** | ![0%](https://geps.dev/progress/0) **0%** (0 / 6 tâches) |
-| **Statut** | 🟡 En préparation |
-| **Prochaine tâche** | T-11 : Déploiement Backend Cloud |
+| **Progression Globale** | ![66%](https://geps.dev/progress/66) **66%** (4 / 6 tâches) |
+| **Statut** | 🔵 En cours |
+| **Prochaine tâche** | T-15 : Formulaire de feedback testeurs |
 
 ---
 
@@ -19,10 +19,10 @@
 
 | ID | Tâche | Statut | Priorité | Estimé |
 | :--- | :--- | :---: | :---: | :---: |
-| **T-11** | Déploiement Backend Cloud (Render / Railway) | `TODO` | 🔴 Critique | 4h |
-| **T-12** | Configuration OpenAI en production | `TODO` | 🔴 Critique | 1h |
-| **T-13** | Sécurisation des variables d'environnement | `TODO` | 🔴 Critique | 2h |
-| **T-14** | Hébergement Frontend (GitHub Pages / Netlify) | `TODO` | 🔴 Critique | 2h |
+| **T-11** | Déploiement Backend Cloud (Render / Railway) | `DONE` | 🔴 Critique | 4h |
+| **T-12** | Configuration OpenAI en production | `DONE` | 🔴 Critique | 1h |
+| **T-13** | Sécurisation des variables d'environnement | `DONE` | 🔴 Critique | 2h |
+| **T-14** | Hébergement Frontend (GitHub Pages / Netlify) | `DONE` | 🔴 Critique | 2h |
 | **T-15** | Formulaire de feedback testeurs | `TODO` | 🟡 Haute | 3h |
 | **T-16** | Amélioration knowledge base post-feedback | `TODO` | 🟢 Normale | 4h |
 

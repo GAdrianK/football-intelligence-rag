@@ -14,3 +14,10 @@ backend/.env
 
 # OS
 .DS_Store
+
+# Generated Databases and Cache
+backend/data/parent_store.db
+backend/data/processed/chunks.jsonl
+backend/data/flashrank_cache/
+backend/evaluation/benchmark_results.json
+

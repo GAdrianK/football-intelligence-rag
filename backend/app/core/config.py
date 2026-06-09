@@ -10,11 +10,33 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     KNOWLEDGE_BASE_DIR: str = ""
+    ALLOWED_ORIGINS: str = "*"
+
+    RAW_DATA_DIR: str = ""
+    PROCESSED_DATA_DIR: str = ""
+    QDRANT_URL: str = ":memory:"
+    QDRANT_COLLECTION_NAME: str = "football_intelligence"
+    SQLITE_DB_PATH: str = ""
 
     def get_kb_dir(self) -> str:
         if self.KNOWLEDGE_BASE_DIR:
             return self.KNOWLEDGE_BASE_DIR
         return os.path.abspath(os.path.join(BASE_DIR.parent, "knowledge_base"))
+
+    def get_raw_data_dir(self) -> str:
+        if self.RAW_DATA_DIR:
+            return self.RAW_DATA_DIR
+        return os.path.abspath(os.path.join(BASE_DIR, "data", "raw"))
+
+    def get_processed_data_dir(self) -> str:
+        if self.PROCESSED_DATA_DIR:
+            return self.PROCESSED_DATA_DIR
+        return os.path.abspath(os.path.join(BASE_DIR, "data", "processed"))
+
+    def get_sqlite_db_path(self) -> str:
+        if self.SQLITE_DB_PATH:
+            return self.SQLITE_DB_PATH
+        return os.path.abspath(os.path.join(BASE_DIR, "data", "parent_store.db"))
 
     # Recherche le fichier .env dans le dossier racine du backend
     model_config = SettingsConfigDict(

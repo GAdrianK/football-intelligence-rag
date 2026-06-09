@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     // API Configurations
-    const API_BASE_URL = window.location.protocol.startsWith('file') 
-        ? 'http://127.0.0.1:8000' 
-        : '';
+    // EN DÉVELOPPEMENT LOCAL : utilise http://127.0.0.1:8000
+    // EN PRODUCTION : Remplacez l'URL ci-dessous par l'URL de votre backend Render
+    const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol.startsWith('file')
+        ? 'http://127.0.0.1:8000'
+        : 'https://football-iq-backend.onrender.com'; // À remplacer par l'URL de votre serveur Render
 
     const LS_KEY = 'fiq_session';
 
@@ -142,8 +144,98 @@ document.addEventListener('DOMContentLoaded', () => {
         return processedLines.join('\n');
     }
 
+    // Rend un rapport tactique structuré sous forme de dashboard premium
+    function renderTacticalReportHTML(report) {
+        return `
+            <div class="tactical-report-dashboard">
+                <div class="report-header">
+                    <span class="report-tag">📊 RAPPORT D'ANALYSE TACTIQUE</span>
+                    <h3>${escapeHtml(report.titre)}</h3>
+                    <p class="report-subject"><strong>Sujet :</strong> ${escapeHtml(report.match_ou_sujet)}</p>
+                </div>
+                
+                <div class="report-grid">
+                    <div class="report-card">
+                        <div class="card-title">⚔️ Organisation Offensive</div>
+                        <div class="card-detail-item"><strong>Création :</strong> ${escapeHtml(report.organisation_offensive.creation)}</div>
+                        <div class="card-detail-item"><strong>Espaces :</strong> ${escapeHtml(report.organisation_offensive.espaces)}</div>
+                        <div class="card-detail-item"><strong>Largeur :</strong> ${escapeHtml(report.organisation_offensive.largeur)}</div>
+                        <div class="card-detail-item"><strong>Profondeur :</strong> ${escapeHtml(report.organisation_offensive.profondeur)}</div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="card-title">🛡️ Organisation Défensive</div>
+                        <div class="card-detail-item"><strong>Bloc :</strong> ${escapeHtml(report.organisation_defensive.bloc)}</div>
+                        <div class="card-detail-item"><strong>Compacité :</strong> ${escapeHtml(report.organisation_defensive.compacite)}</div>
+                        <div class="card-detail-item"><strong>Duels :</strong> ${escapeHtml(report.organisation_defensive.duels)}</div>
+                        <div class="card-detail-item"><strong>Couverture :</strong> ${escapeHtml(report.organisation_defensive.couverture)}</div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="card-title">⚡ Pressing & Transitions</div>
+                        <div class="card-detail-item"><strong>Pressing (Intensité) :</strong> ${escapeHtml(report.pressing.intensite)}</div>
+                        <div class="card-detail-item"><strong>Pressing (Zones) :</strong> ${escapeHtml(report.pressing.zones)}</div>
+                        <div class="card-detail-item"><strong>Transition Off. :</strong> ${escapeHtml(report.transitions.offensive)}</div>
+                        <div class="card-detail-item"><strong>Transition Déf. :</strong> ${escapeHtml(report.transitions.defensive)}</div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="card-title">🏗️ Sortie & Progression</div>
+                        <div class="card-detail-item"><strong>Relance :</strong> ${escapeHtml(report.construction.relance)}</div>
+                        <div class="card-detail-item"><strong>Progression :</strong> ${escapeHtml(report.construction.progression)}</div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="card-title">🏃‍♂️ Animation des Couloirs</div>
+                        <div class="card-detail-item"><strong>Ailes :</strong> ${escapeHtml(report.couloirs.ailes)}</div>
+                        <div class="card-detail-item"><strong>Centres :</strong> ${escapeHtml(report.couloirs.centres)}</div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="card-title">💎 Milieu & Occasions</div>
+                        <div class="card-detail-item"><strong>Milieu (Domination) :</strong> ${escapeHtml(report.milieu.domination)}</div>
+                        <div class="card-detail-item"><strong>Milieu (Création) :</strong> ${escapeHtml(report.milieu.creation)}</div>
+                        <div class="card-detail-item"><strong>Occasions (Qualité) :</strong> ${escapeHtml(report.occasions.qualite)}</div>
+                        <div class="card-detail-item"><strong>Occasions (Volume) :</strong> ${escapeHtml(report.occasions.volume)}</div>
+                    </div>
+                </div>
+
+                <div class="report-section-full">
+                    <div class="section-title">👥 Analyse Individuelle (Joueurs Clés)</div>
+                    <div class="players-list">
+                        ${report.joueurs_cles.map(player => `
+                            <div class="player-card">
+                                <div class="player-header">
+                                    <strong>${escapeHtml(player.nom)}</strong>
+                                </div>
+                                <div class="player-info-text"><strong>Impact :</strong> ${escapeHtml(player.impact)}</div>
+                                ${player.erreurs ? `<div class="player-info-text warnings"><strong>Axe de vigilance :</strong> ${escapeHtml(player.erreurs)}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="report-section-full recommendations-section">
+                    <div class="section-title">💡 Recommandations Tactiques</div>
+                    <div class="recs-list">
+                        <div class="rec-work-axes">
+                            <strong>Axes de travail prioritaires :</strong>
+                            <ul>
+                                ${report.recommandations.axes_travail.map(axe => `<li>${escapeHtml(axe)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        <div class="rec-drill">
+                            <strong>⚽ Exercice terrain préconisé :</strong>
+                            <p>${escapeHtml(report.recommandations.exercice_entrainement)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // =============================================================
-    // API call helper (shared by send + quick actions)
+    // API call helpers (shared by send + quick actions)
     // =============================================================
 
     async function callChatAPI(message) {
@@ -154,6 +246,25 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         const response = await fetch(`${API_BASE_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || `Statut serveur ${response.status}`);
+        }
+        
+        return response.json();
+    }
+
+    async function callAnalyzeAPI(query) {
+        const payload = {
+            query: query
+        };
+        
+        const response = await fetch(`${API_BASE_URL}/api/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -299,10 +410,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageContent = document.createElement('div');
         messageContent.className = 'message-content';
         if (role === 'assistant') {
-            messageContent.classList.add('markdown-rendered');
-            messageContent.innerHTML = isError 
-                ? `<span class="error-title">⚠️ Erreur :</span> ${escapeHtml(content)}` 
-                : renderMarkdown(content);
+            const trimmed = content.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const report = JSON.parse(trimmed);
+                    messageContent.innerHTML = renderTacticalReportHTML(report);
+                } catch (e) {
+                    messageContent.classList.add('markdown-rendered');
+                    messageContent.innerHTML = isError 
+                        ? `<span class="error-title">⚠️ Erreur :</span> ${escapeHtml(content)}` 
+                        : renderMarkdown(content);
+                }
+            } else {
+                messageContent.classList.add('markdown-rendered');
+                messageContent.innerHTML = isError 
+                    ? `<span class="error-title">⚠️ Erreur :</span> ${escapeHtml(content)}` 
+                    : renderMarkdown(content);
+            }
         } else {
             messageContent.textContent = content;
         }
@@ -582,15 +706,31 @@ document.addEventListener('DOMContentLoaded', () => {
         messagesContainer.appendChild(typingWrapper);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
+        const isAnalysisQuery = query.toLowerCase().includes('analyse') || 
+                                query.toLowerCase().includes('analyser') || 
+                                query.toLowerCase().includes('rapport');
+        
         try {
-            const data = await callChatAPI(query);
-            typingWrapper.remove();
-            
-            const assistantMsgEl = createMessageElement('assistant', data.answer, data.sources || []);
-            messagesContainer.appendChild(assistantMsgEl);
-            
-            currentSession.messages.push({ role: 'user', content: query });
-            currentSession.messages.push({ role: 'assistant', content: data.answer, sources: data.sources });
+            if (isAnalysisQuery) {
+                const data = await callAnalyzeAPI(query);
+                typingWrapper.remove();
+                
+                const reportStr = JSON.stringify(data.report);
+                const assistantMsgEl = createMessageElement('assistant', reportStr, data.sources || []);
+                messagesContainer.appendChild(assistantMsgEl);
+                
+                currentSession.messages.push({ role: 'user', content: query });
+                currentSession.messages.push({ role: 'assistant', content: reportStr, sources: data.sources });
+            } else {
+                const data = await callChatAPI(query);
+                typingWrapper.remove();
+                
+                const assistantMsgEl = createMessageElement('assistant', data.answer, data.sources || []);
+                messagesContainer.appendChild(assistantMsgEl);
+                
+                currentSession.messages.push({ role: 'user', content: query });
+                currentSession.messages.push({ role: 'assistant', content: data.answer, sources: data.sources });
+            }
             saveSession();
             
         } catch (error) {
