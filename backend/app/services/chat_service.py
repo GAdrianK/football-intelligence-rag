@@ -15,9 +15,10 @@ class ChatService:
     Service de Chat orchestrant la recherche RAG et la génération LLM
     selon différents profils d'assistance footballistique.
     """
-    def __init__(self, rag_engine: RAGEngine, openai_api_key: Optional[str] = None):
+    def __init__(self, rag_engine: RAGEngine, openai_api_key: Optional[str] = None, gemini_api_key: Optional[str] = None):
         self.rag_engine = rag_engine
         self.api_key = openai_api_key
+        self.gemini_api_key = gemini_api_key
         self.prompts: Dict[ChatMode, str] = {}
         self.classifier = QueryClassifier()
         self._load_prompts()
@@ -118,12 +119,54 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
 [MESSAGE DE L'UTILISATEUR]
 {request.message}"""
 
-        # 4. Génération (OpenAI ou Fallback Mock local)
-        use_openai = False
-        if self.api_key and not self.api_key.startswith("mock-") and len(self.api_key.strip()) > 0:
-            use_openai = True
+        # 4. Génération (Gemini, OpenAI ou Fallback Mock local)
+        use_gemini = self.gemini_api_key and not self.gemini_api_key.startswith("mock-") and len(self.gemini_api_key.strip()) > 0
+        use_openai = self.api_key and not self.api_key.startswith("mock-") and len(self.api_key.strip()) > 0
 
-        if use_openai:
+        if use_gemini:
+            try:
+                from google import genai
+                from google.genai import types
+                
+                client = genai.Client(api_key=self.gemini_api_key)
+                
+                # Construire les messages pour le chat completion
+                contents = []
+                if request.history:
+                    for h in request.history[-5:]:
+                        # Associer le role correct pour Gemini ('model' ou 'user')
+                        role = "model" if h.role == "assistant" else h.role
+                        contents.append(types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=h.content)]
+                        ))
+                
+                # Ajouter le message utilisateur courant
+                contents.append(types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_prompt)]
+                ))
+                
+                response = client.models.generate_content(
+                    model="gemini-flash-latest",
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2
+                    )
+                )
+                
+                answer = response.text
+                return ChatResponse(
+                    answer=answer,
+                    mode=request.mode,
+                    sources=sources
+                )
+            except Exception as e:
+                print(f"Erreur lors de l'appel Gemini : {e}.")
+                raise e
+
+        if use_openai and not use_gemini: # ou si gemini a échoué
             try:
                 client = OpenAI(api_key=self.api_key)
                 

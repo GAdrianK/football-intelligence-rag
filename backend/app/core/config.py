@@ -6,10 +6,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
+    APISPORTS_KEY: str = ""
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     KNOWLEDGE_BASE_DIR: str = ""
+
+    @property
+    def gemini_key(self) -> str:
+        # Préférer GEMINI_API_KEY puis GOOGLE_API_KEY
+        key = self.GEMINI_API_KEY or self.GOOGLE_API_KEY or ""
+        return key.strip()
     ALLOWED_ORIGINS: str = "*"
 
     RAW_DATA_DIR: str = ""

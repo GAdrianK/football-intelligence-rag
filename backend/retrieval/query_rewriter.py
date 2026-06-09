@@ -20,34 +20,50 @@ class QueryRewriter:
         else:
             self.client = None
 
-    def rewrite(self, query: str) -> List[str]:
+    def rewrite(self, query: str) -> dict:
         """
-        Réécrit la requête en 2-3 variations optimisées pour la recherche.
+        Réécrit la requête en variations et extrait la période et l'intervalle cibles.
+        Retourne un dictionnaire contenant :
+        - "variations": List[str]
+        - "periode_cible": str ("1MT", "2MT", "prolongations", "global")
+        - "intervalle_cible": str ("0-15", "15-30", ..., ou "all")
         """
         if not query.strip():
-            return []
+            return {
+                "variations": [],
+                "periode_cible": "global",
+                "intervalle_cible": "all"
+            }
 
         if self.use_openai and self.client:
             try:
                 system_prompt = (
                     "Tu es un expert en tactique de football spécialisé dans l'ingénierie RAG.\n"
-                    "Ton rôle est de prendre une question utilisateur sur le football et de générer "
-                    "2 à 3 requêtes de recherche simplifiées ou variations sémantiques (mots-clés, concepts tactiques, équipes) "
-                    "qui maximisent les chances de trouver les bons documents dans une base vectorielle.\n"
-                    "Exemple :\n"
-                    "Question: 'Comment Paris a géré le contre-pressing de l'OM ?'\n"
-                    "Variations: [\"PSG pressing Marseille\", \"sortie de balle PSG sous pression\", \"contre-pressing tactique OM\"]\n"
-                    "Renvoie uniquement un tableau JSON de chaînes de caractères. Pas de markdown, pas d'explication."
+                    "Ton rôle est de prendre une question utilisateur sur le football et de générer :\n"
+                    "1. 2 à 3 requêtes de recherche simplifiées ou variations sémantiques (mots-clés, concepts tactiques, équipes).\n"
+                    "2. La période cible du match ('1MT', '2MT', 'prolongations', 'global') si elle est spécifiée ou induite.\n"
+                    "3. L'intervalle de temps cible en minutes ('0-15', '15-30', '30-45', '45-60', '60-75', '75-90', '90+', 'all') si spécifié ou induit.\n\n"
+                    "Règles d'induction temporelle :\n"
+                    "- 'début de match', 'premières minutes', '12e minute' -> periode_cible='1MT', intervalle_cible='0-15' (ou intervalle correspondant)\n"
+                    "- 'fin de match', 'dernières minutes', '72e minute' -> periode_cible='2MT', intervalle_cible='60-75' (ou intervalle correspondant)\n"
+                    "- Si aucun élément temporel n'est détecté, utilise 'global' pour periode_cible et 'all' pour intervalle_cible.\n\n"
+                    "Renvoie UNIQUEMENT un objet JSON avec les clés suivantes :\n"
+                    "{\n"
+                    "  \"variations\": [\"string\"],\n"
+                    "  \"periode_cible\": \"string\",\n"
+                    "  \"intervalle_cible\": \"string\"\n"
+                    "}\n"
+                    "Pas de markdown, pas d'explication."
                 )
 
                 response = self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Génère des variations pour cette question : '{query}'"}
+                        {"role": "user", "content": f"Génère le JSON pour cette question : '{query}'"}
                     ],
                     temperature=0.2,
-                    max_tokens=100
+                    max_tokens=150
                 )
                 
                 content = response.choices[0].message.content.strip()
@@ -55,24 +71,79 @@ class QueryRewriter:
                 content = re.sub(r"```json\s*", "", content)
                 content = re.sub(r"\s*```", "", content)
                 
-                variations = json.loads(content)
-                if isinstance(variations, list):
-                    # S'assurer que la requête d'origine est incluse si elle n'y est pas
+                result = json.loads(content)
+                if isinstance(result, dict) and "variations" in result:
+                    # Assurer la présence des champs temporels par défaut
+                    result.setdefault("periode_cible", "global")
+                    result.setdefault("intervalle_cible", "all")
+                    
+                    # S'assurer que la requête d'origine est incluse
+                    variations = result["variations"]
                     if query not in variations:
                         variations.insert(0, query)
-                    return [v.strip() for v in variations if isinstance(v, str)]
+                    result["variations"] = [v.strip() for v in variations if isinstance(v, str)]
+                    return result
             except Exception as e:
                 logger.error(f"Erreur lors du Query Rewriting via OpenAI: {e}. Utilisation du fallback local.")
         
         # Fallback déterministe local par règles (mode hors-ligne ou erreur)
         return self._fallback_rewrite(query)
 
-    def _fallback_rewrite(self, query: str) -> List[str]:
+    def _fallback_rewrite(self, query: str) -> dict:
         """
-        Génère des variations simples basées sur des règles de mots-clés de football.
+        Génère des variations et extrait des paramètres temporels basés sur des expressions régulières.
         """
-        variations = [query]
         query_lower = query.lower()
+        
+        # 1. Extraction temporelle déterministe
+        periode = "global"
+        intervalle = "all"
+        
+        # Détection période
+        if any(w in query_lower for w in ["1mt", "première mi-temps", "premiere mi-temps", "début de match", "debut de match", "premières minutes", "premieres minutes"]):
+            periode = "1MT"
+        elif any(w in query_lower for w in ["2mt", "deuxième mi-temps", "deuxieme mi-temps", "fin de match", "dernières minutes", "dernieres minutes"]):
+            periode = "2MT"
+        elif "prolongation" in query_lower:
+            periode = "prolongations"
+            
+        # Détection intervalle via regex minute (ex: 12e, 12ème, 72', 72e)
+        min_match = re.search(r"\b(\d{1,3})(?:e|ème)?\s*(?:minute|min|'|è)", query_lower)
+        if min_match:
+            minute = int(min_match.group(1))
+            if minute <= 45:
+                if periode == "global":
+                    periode = "1MT"
+                if minute <= 15:
+                    intervalle = "0-15"
+                elif minute <= 30:
+                    intervalle = "15-30"
+                else:
+                    intervalle = "30-45"
+            else:
+                if periode == "global":
+                    periode = "2MT"
+                if minute <= 60:
+                    intervalle = "45-60"
+                elif minute <= 75:
+                    intervalle = "60-75"
+                elif minute <= 90:
+                    intervalle = "75-90"
+                else:
+                    intervalle = "90+"
+        else:
+            # Heuristiques textuelles simples
+            if any(w in query_lower for w in ["début de match", "debut de match", "premières minutes"]):
+                intervalle = "0-15"
+                if periode == "global":
+                    periode = "1MT"
+            elif any(w in query_lower for w in ["fin de match", "dernières minutes"]):
+                intervalle = "60-75"
+                if periode == "global":
+                    periode = "2MT"
+
+        # 2. Génération des variations
+        variations = [query]
         
         # Extraction simplifiée de mots tactiques clés
         keywords = []
@@ -87,13 +158,10 @@ class QueryRewriter:
                 teams.append(team)
 
         if teams and keywords:
-            # ex: "psg pressing"
             variations.append(f"{' '.join(teams)} { ' '.join(keywords) }")
         elif keywords:
-            # ex: "pressing tactique"
             variations.append(f"{keywords[0]} tactique")
             
-        # Variation standard
         variations.append(f"{query} tactique football")
         
         # Dédupliquer tout en gardant l'ordre
@@ -104,4 +172,9 @@ class QueryRewriter:
                 seen.add(v.lower())
                 dedup_vars.append(v)
                 
-        return dedup_vars[:3]
+        return {
+            "variations": dedup_vars[:3],
+            "periode_cible": periode,
+            "intervalle_cible": intervalle
+        }
+

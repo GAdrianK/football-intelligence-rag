@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
         messages: []   // { role, content, sources? }
     };
 
+    let selectedPeriode = 'global';
+    let selectedIntervalle = 'all';
+
     // Selectors
     const modeCards = document.querySelectorAll('.mode-card');
     const welcomeText = document.getElementById('welcome-text');
@@ -144,12 +147,49 @@ document.addEventListener('DOMContentLoaded', () => {
         return processedLines.join('\n');
     }
 
+    // Extrait les badges temporels des données du rapport et des sources
+    function extractTemporalBadges(report, sources = []) {
+        const badges = new Set();
+        const textToScan = JSON.stringify(report) + " " + sources.map(s => s.text).join(" ");
+        
+        // Détecter 1MT / 2MT
+        if (/1MT|première mi-temps|1ère mi-temps/i.test(textToScan)) {
+            badges.add("⏱️ 1MT");
+        }
+        if (/2MT|deuxième mi-temps|2ème mi-temps/i.test(textToScan)) {
+            badges.add("⏱️ 2MT");
+        }
+        
+        // Détecter les minutes spécifiques (ex: 12e, 72e, 12ème, 72', à la 12e minute)
+        const minRegex = /\b(\d{1,2})(?:e|ème)?\s*(?:minute|min|')/gi;
+        let match;
+        while ((match = minRegex.exec(textToScan)) !== null) {
+            badges.add(`⏱️ ${match[1]}'`);
+        }
+        
+        const quoteRegex = /\b(\d{1,2})'/g;
+        while ((match = quoteRegex.exec(textToScan)) !== null) {
+            badges.add(`⏱️ ${match[1]}'`);
+        }
+        
+        return Array.from(badges);
+    }
+
     // Rend un rapport tactique structuré sous forme de dashboard premium
-    function renderTacticalReportHTML(report) {
+    function renderTacticalReportHTML(report, sources = []) {
+        const badges = extractTemporalBadges(report, sources);
+        const badgesHTML = badges.map(b => {
+            const isMin = b.includes("'");
+            return `<span class="temporal-badge" data-type="${isMin ? 'minute' : 'period'}">${escapeHtml(b)}</span>`;
+        }).join('');
+
         return `
             <div class="tactical-report-dashboard">
                 <div class="report-header">
-                    <span class="report-tag">📊 RAPPORT D'ANALYSE TACTIQUE</span>
+                    <div class="report-header-top">
+                        <span class="report-tag">📊 RAPPORT D'ANALYSE TACTIQUE</span>
+                        <div class="report-badges">${badgesHTML}</div>
+                    </div>
                     <h3>${escapeHtml(report.titre)}</h3>
                     <p class="report-subject"><strong>Sujet :</strong> ${escapeHtml(report.match_ou_sujet)}</p>
                 </div>
@@ -259,9 +299,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return response.json();
     }
 
-    async function callAnalyzeAPI(query) {
+    async function callAnalyzeAPI(query, periode = null, intervalleTemps = null) {
         const payload = {
-            query: query
+            query: query,
+            periode: periode,
+            intervalle_temps: intervalleTemps
         };
         
         const response = await fetch(`${API_BASE_URL}/api/analyze`, {
@@ -414,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
                 try {
                     const report = JSON.parse(trimmed);
-                    messageContent.innerHTML = renderTacticalReportHTML(report);
+                    messageContent.innerHTML = renderTacticalReportHTML(report, sources);
                 } catch (e) {
                     messageContent.classList.add('markdown-rendered');
                     messageContent.innerHTML = isError 
@@ -588,6 +630,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSession = { mode: mode, messages: [] };
         clearStoredSession();
 
+        // Reset temporal selections
+        selectedPeriode = 'global';
+        selectedIntervalle = 'all';
+        const tBtns = document.querySelectorAll('.temporal-btn');
+        tBtns.forEach(btn => {
+            const isDefault = btn.getAttribute('data-periode') === 'global' && btn.getAttribute('data-intervalle') === 'all';
+            btn.classList.toggle('active', isDefault);
+        });
+
         if (messagesContainer) messagesContainer.innerHTML = '';
         if (chatInput) {
             chatInput.value = '';
@@ -712,7 +763,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             if (isAnalysisQuery) {
-                const data = await callAnalyzeAPI(query);
+                const pFilter = selectedPeriode !== 'global' ? selectedPeriode : null;
+                const iFilter = selectedIntervalle !== 'all' ? selectedIntervalle : null;
+                const data = await callAnalyzeAPI(query, pFilter, iFilter);
                 typingWrapper.remove();
                 
                 const reportStr = JSON.stringify(data.report);
@@ -767,6 +820,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Temporal selector buttons event listeners
+    const temporalBtns = document.querySelectorAll('.temporal-btn');
+    temporalBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            temporalBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedPeriode = btn.getAttribute('data-periode');
+            selectedIntervalle = btn.getAttribute('data-intervalle');
+        });
+    });
+
     // 2. New Session Button — resets + clears localStorage
     if (newSessionBtn) {
         newSessionBtn.addEventListener('click', () => {
@@ -815,4 +879,139 @@ document.addEventListener('DOMContentLoaded', () => {
         resetSession('coach');
     }
     checkHealth();
+
+    // =============================================================
+    // ENGINE TAB SWITCHER — Focus Match vs Tendances Saison
+    // =============================================================
+
+    const tabFocus  = document.getElementById('tab-focus');
+    const tabTrends = document.getElementById('tab-trends');
+    const trendsPanel         = document.getElementById('trends-panel');
+    const modeSelectorSection = document.querySelector('.mode-selector-section');
+    const chatWindowSection   = document.getElementById('chat-messages-container');
+    const chatFooter          = document.querySelector('.chat-input-area');
+
+    // Focus panels (shown in Focus Match tab)
+    const focusPanels = [modeSelectorSection, chatWindowSection, chatFooter].filter(Boolean);
+
+    function switchToFocus() {
+        tabFocus.classList.add('active');
+        tabTrends.classList.remove('active');
+        focusPanels.forEach(el => el.style.display = '');
+        if (trendsPanel) trendsPanel.style.display = 'none';
+    }
+
+    function switchToTrends() {
+        tabTrends.classList.add('active');
+        tabFocus.classList.remove('active');
+        focusPanels.forEach(el => el.style.display = 'none');
+        if (trendsPanel) trendsPanel.style.display = 'flex';
+    }
+
+    if (tabFocus)  tabFocus.addEventListener('click', switchToFocus);
+    if (tabTrends) tabTrends.addEventListener('click', switchToTrends);
+
+    // =============================================================
+    // TRENDS ENGINE — API call + rendering
+    // =============================================================
+
+    const trendsInput   = document.getElementById('trends-input');
+    const trendsSendBtn = document.getElementById('trends-send-btn');
+    const trendsOutput  = document.getElementById('trends-output');
+
+    // Competition filter state
+    let selectedCompetitions = [];
+
+    document.querySelectorAll('.comp-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.comp-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const comp = btn.dataset.comp;
+            selectedCompetitions = comp ? [comp] : [];
+        });
+    });
+
+    // Suggestion chips
+    document.querySelectorAll('.suggestion-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (trendsInput) {
+                trendsInput.value = chip.dataset.q;
+                trendsInput.focus();
+            }
+        });
+    });
+
+    async function sendTrendsQuery() {
+        if (!trendsInput || !trendsOutput) return;
+        const query = trendsInput.value.trim();
+        if (!query) return;
+
+        // Show loader
+        trendsOutput.innerHTML = `
+            <div class="trends-loading">
+                <div class="trends-spinner"></div>
+                <p>Analyse multi-match en cours…</p>
+                <p class="trends-loading-sub">Isolation des contextes, synthèse comparative GPT-4o</p>
+            </div>`;
+
+        trendsSendBtn.disabled = true;
+
+        try {
+            const payload = {
+                query,
+                competitions: selectedCompetitions.length > 0 ? selectedCompetitions : null
+            };
+
+            const response = await fetch(`${API_BASE_URL}/api/trends`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            renderTrendsReport(data, query);
+        } catch (err) {
+            trendsOutput.innerHTML = `
+                <div class="trends-error">
+                    <p>❌ Erreur lors de l'analyse : ${escapeHtml(err.message)}</p>
+                    <p>Assurez-vous que le serveur FastAPI est démarré sur le port 8000.</p>
+                </div>`;
+        } finally {
+            trendsSendBtn.disabled = false;
+        }
+    }
+
+    function renderTrendsReport(data, query) {
+        const matchCount = data.matches_analyzed ? data.matches_analyzed.length : 0;
+        const matchBadges = (data.matches_analyzed || [])
+            .map(s => `<span class="match-source-badge">${escapeHtml(s.replace('match_', '').replace('.md', ''))}</span>`)
+            .join('');
+
+        trendsOutput.innerHTML = `
+            <div class="trends-report">
+                <div class="trends-report-header">
+                    <div class="trends-report-meta">
+                        <span class="trends-tag">📊 SYNTHÈSE COMPARATIVE</span>
+                        <span class="trends-meta-info">${matchCount} match(s) analysé(s) — ${data.chunks_used || 0} chunks</span>
+                    </div>
+                    <p class="trends-query-echo"><strong>Requête :</strong> ${escapeHtml(query)}</p>
+                    <div class="trends-match-sources">${matchBadges}</div>
+                </div>
+                <div class="trends-report-body">
+                    ${renderMarkdown(data.synthesis || 'Aucune synthèse générée.')}
+                </div>
+            </div>`;
+    }
+
+    if (trendsSendBtn) trendsSendBtn.addEventListener('click', sendTrendsQuery);
+    if (trendsInput) {
+        trendsInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTrendsQuery();
+            }
+        });
+    }
 });

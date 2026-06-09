@@ -18,7 +18,8 @@ async def chat_with_assistant(request: ChatRequest):
     try:
         chat_service = ChatService(
             rag_engine=rag_engine,
-            openai_api_key=settings.OPENAI_API_KEY
+            openai_api_key=settings.OPENAI_API_KEY,
+            gemini_api_key=settings.gemini_key
         )
         response = chat_service.generate_response(request)
         return response

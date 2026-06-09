@@ -39,6 +39,30 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         )
         return [item.embedding for item in response.data]
 
+class GeminiEmbeddingProvider(EmbeddingProvider):
+    """
+    Fournisseur d'embeddings utilisant l'API Google Gemini.
+    """
+    def __init__(self, api_key: str, model: str = "gemini-embedding-2"):
+        from google import genai
+        self.client = genai.Client(api_key=api_key)
+        self.model = model
+
+    def get_embedding(self, text: str) -> List[float]:
+        from google.genai import types
+        clean_text = text.replace("\n", " ")
+        try:
+            response = self.client.models.embed_content(
+                model=self.model,
+                contents=clean_text,
+                config=types.EmbedContentConfig(output_dimensionality=1536)
+            )
+            return response.embeddings[0].values
+        except Exception as e:
+            # Fallback to local tf-idf or error raise
+            print(f"[ERROR] Gemini embedding failed: {e}")
+            raise e
+
 
 class TFIDFEmbeddingProvider(EmbeddingProvider):
     """

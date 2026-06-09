@@ -9,3 +9,6 @@ httpx>=0.24.0
 qdrant-client>=1.7.0
 rank-bm25>=0.2.2
 flashrank>=0.2.0
+soccerdata>=1.4.0
+pandas>=2.0.0
+

@@ -12,6 +12,7 @@ from app.api.pdf import router as pdf_router
 # Importation du pipeline de recherche avancée
 from retrieval.hybrid_engine import HybridSearchEngine
 from retrieval.reranker import TacticalReranker
+from retrieval.trend_engine import TrendAnalysisEngine
 from generation.schemas import (
     TacticalReportSchema, OrganisationOffensive, OrganisationDefensive,
     Transitions, Pressing, Construction, Couloirs, Milieu, Occasions,
@@ -47,11 +48,14 @@ rag_engine = RAGEngine(
 # Instances des moteurs de recherche avancée
 hybrid_search_engine = HybridSearchEngine()
 tactical_reranker = TacticalReranker()
+trend_engine = TrendAnalysisEngine()
 
 # Schémas de requêtes et réponses pour l'analyse
 class AnalysisRequest(BaseModel):
     query: str
     filter_dict: Optional[dict] = None
+    periode: Optional[str] = None
+    intervalle_temps: Optional[str] = None
 
 class AnalysisResponse(BaseModel):
     report: TacticalReportSchema
@@ -80,7 +84,13 @@ async def analyze_match(request: AnalysisRequest):
     query = request.query
     
     # 1. Utiliser le moteur de recherche hybride pour récupérer les chunks
-    raw_results = hybrid_search_engine.search(query, top_k=15, filter_dict=request.filter_dict)
+    raw_results = hybrid_search_engine.search(
+        query, 
+        top_k=15, 
+        filter_dict=request.filter_dict,
+        periode_cible=request.periode,
+        intervalle_cible=request.intervalle_temps
+    )
     # Rerank et récupération du Top 5 parent-child
     top_results = tactical_reranker.rerank_and_resolve(query, raw_results, top_k=5)
 
@@ -103,22 +113,47 @@ async def analyze_match(request: AnalysisRequest):
 
     context_text = "\n\n---\n\n".join(context_documents) if context_documents else "Aucune fiche tactique pertinente trouvée."
 
-    # 2. Appel OpenAI Structured Outputs (ou Fallback Mock)
-    api_key = settings.OPENAI_API_KEY
-    use_openai = api_key and not api_key.startswith("mock-") and len(api_key.strip()) > 0
+    # 2. Appel Gemini (si clé présente) ou OpenAI Structured Outputs (ou Fallback Mock)
+    gemini_key = settings.gemini_key
+    use_gemini = gemini_key and not gemini_key.startswith("mock-") and len(gemini_key.strip()) > 0
+    
+    openai_key = settings.OPENAI_API_KEY
+    use_openai = openai_key and not openai_key.startswith("mock-") and len(openai_key.strip()) > 0
 
-    if use_openai:
+    system_prompt = (
+        "Tu es un expert mondial en tactique de football, un analyste chevronné travaillant pour des clubs professionnels.\n"
+        "Ta mission est de rédiger un rapport tactique d'excellence basé UNIQUEMENT sur les documents fournis en contexte.\n"
+        "Tu dois structurer ta réponse en renseignant minutieusement chacun des 10 piliers tactiques exigés.\n"
+        "N'invente aucun fait. Si une information n'est pas présente dans le contexte, décris-la de manière neutre ou suggère une consigne générique cohérente.\n"
+        "Voici le contexte tactique à utiliser pour ton analyse :\n\n"
+        f"{context_text}"
+    )
+
+    if use_gemini:
         try:
-            client = OpenAI(api_key=api_key)
+            from google import genai
+            from google.genai import types
             
-            system_prompt = (
-                "Tu es un expert mondial en tactique de football, un analyste chevronné travaillant pour des clubs professionnels.\n"
-                "Ta mission est de rédiger un rapport tactique d'excellence basé UNIQUEMENT sur les documents fournis en contexte.\n"
-                "Tu dois structurer ta réponse en renseignant minutieusement chacun des 10 piliers tactiques exigés.\n"
-                "N'invente aucun fait. Si une information n'est pas présente dans le contexte, décris-la de manière neutre ou suggère une consigne générique cohérente.\n"
-                "Voici le contexte tactique à utiliser pour ton analyse :\n\n"
-                f"{context_text}"
+            client = genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(
+                model="gemini-flash-latest",
+                contents=f"Génère le rapport tactique complet pour : '{query}'",
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=TacticalReportSchema,
+                    temperature=0.2
+                )
             )
+            report = TacticalReportSchema.model_validate_json(response.text)
+            return AnalysisResponse(report=report, sources=sources)
+        except Exception as e:
+            print(f"[ERROR] Erreur critique Gemini lors de l'analyse : {e}")
+            raise e
+
+    if use_openai and not use_gemini: # ou si gemini a échoué
+        try:
+            client = OpenAI(api_key=openai_key)
             
             # Utilisation de Structured Outputs d'OpenAI pour forcer le schéma strict
             response = client.beta.chat.completions.parse(
@@ -208,10 +243,42 @@ async def analyze_match(request: AnalysisRequest):
         
     return AnalysisResponse(report=mock_report, sources=sources)
 
+# -----------------------------------------------------------------------
+# Endpoint POST /api/trends  — Moteur de Tendances Multi-Match
+# -----------------------------------------------------------------------
+class TrendsRequest(BaseModel):
+    query: str
+    competitions: Optional[List[str]] = None  # ex: ["UCL", "Ligue 1"]
+
+class TrendsResponse(BaseModel):
+    synthesis: str
+    matches_analyzed: List[str]
+    chunks_used: int
+
+@app.post("/api/trends", response_model=TrendsResponse)
+async def analyze_trends(request: TrendsRequest):
+    """
+    Analyse macro / comparative sur plusieurs matchs de la saison PSG.
+    Exemples :
+      - "Compare le pressing face à l'Inter et face à Man City"
+      - "Évolution du rôle de Vitinha cette saison"
+      - "Analyse de l'efficacité offensive en Ligue des Champions"
+    """
+    result = trend_engine.analyze(
+        query=request.query,
+        competitions=request.competitions,
+    )
+    return TrendsResponse(
+        synthesis=result["synthesis"],
+        matches_analyzed=result["matches_analyzed"],
+        chunks_used=result["chunks_used"],
+    )
+
+
 @app.on_event("startup")
 async def startup_event():
-    # S'assurer que les variables de configuration sont chargées correctement
-    assert settings.OPENAI_API_KEY is not None, "La clé API OpenAI n'a pas pu être chargée !"
+    # S'assurer que les variables de configuration sont chargées correctement (au moins une clé LLM)
+    assert settings.OPENAI_API_KEY is not None or settings.gemini_key != "", "Aucune clé API (OpenAI ou Gemini) n'a pu être chargée !"
     # Initialiser le RAG
     rag_engine.initialize()
     print("Football IQ Assistant API démarrée avec succès.")

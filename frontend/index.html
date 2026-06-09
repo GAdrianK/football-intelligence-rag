@@ -119,6 +119,23 @@
                 </div>
             </header>
 
+            <!-- ===== ENGINE TAB SWITCHER ===== -->
+            <div class="engine-tab-switcher" id="engine-tab-switcher">
+                <button class="engine-tab active" id="tab-focus" data-tab="focus">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    🔍 Focus Match
+                </button>
+                <button class="engine-tab" id="tab-trends" data-tab="trends">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-8 4 4 4-6 4 5"/>
+                    </svg>
+                    📊 Tendances Saison
+                </button>
+            </div>
+
             <!-- Mode Selector Container -->
             <section class="mode-selector-section">
                 <h3>Choisissez le prisme d'analyse :</h3>
@@ -164,6 +181,44 @@
                         </div>
                         <span class="active-badge">Actif</span>
                     </button>
+                </div>
+            </section>
+
+            <!-- ===== TRENDS PANEL (hidden by default) ===== -->
+            <section class="trends-panel" id="trends-panel" style="display:none">
+                <div class="trends-header">
+                    <h3>📊 Analyse de Tendances Multi-Match</h3>
+                    <p>Comparez plusieurs matchs, suivez l'évolution des indicateurs sur la saison entière.</p>
+                </div>
+
+                <!-- Trends Input -->
+                <div class="trends-input-wrapper">
+                    <div class="trends-competition-filters">
+                        <button class="comp-filter-btn active" data-comp="">Toutes compétitions</button>
+                        <button class="comp-filter-btn" data-comp="UCL">🏆 LDC</button>
+                        <button class="comp-filter-btn" data-comp="Ligue 1">🇫🇷 Ligue 1</button>
+                    </div>
+                    <div class="trends-query-row">
+                        <textarea id="trends-input" placeholder="Ex : Compare le pressing face à l'Inter et face à Man City..." rows="2"></textarea>
+                        <button class="trends-send-btn" id="trends-send-btn">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="trends-suggestions">
+                        <span class="suggestion-chip" data-q="Compare l'animation offensive contre l'Inter et contre Manchester City en LDC">💡 Inter vs Man City</span>
+                        <span class="suggestion-chip" data-q="Évolution du pressing du PSG sur toute la saison">💡 Évolution pressing</span>
+                        <span class="suggestion-chip" data-q="Analyse de l'efficacité offensive en Ligue des Champions">💡 Efficacité LDC</span>
+                    </div>
+                </div>
+
+                <!-- Trends Output -->
+                <div class="trends-output" id="trends-output">
+                    <div class="trends-empty-state">
+                        <div class="empty-icon">📊</div>
+                        <p>Posez une question comparative sur la saison du PSG pour obtenir une synthèse multi-match.</p>
+                    </div>
                 </div>
             </section>
 
@@ -257,6 +312,14 @@
 
             <!-- Bottom Input Box Area -->
             <footer class="chat-input-area">
+                <!-- Sélecteur Temporel Glassmorphism -->
+                <div class="temporal-selector-container">
+                    <button class="temporal-btn active" data-periode="global" data-intervalle="all">Match Entier</button>
+                    <button class="temporal-btn" data-periode="1MT" data-intervalle="all">1ère Mi-temps</button>
+                    <button class="temporal-btn" data-periode="2MT" data-intervalle="all">2ème Mi-temps</button>
+                    <button class="temporal-btn" data-periode="2MT" data-intervalle="60-75">Fin de match (60'-90')</button>
+                </div>
+                
                 <div class="input-container">
                     <textarea id="chat-input" placeholder="Écrivez votre consigne tactique ou question RAG ici..." rows="1"></textarea>
                     <button class="send-btn" id="send-message-btn" aria-label="Envoyer le message">

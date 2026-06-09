@@ -5,7 +5,7 @@ import re
 import math
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, Optional
 
 # Ajout du dossier backend au sys.path pour permettre les imports absolus
 backend_dir = Path(__file__).resolve().parent.parent
@@ -13,7 +13,10 @@ sys.path.append(str(backend_dir))
 
 from app.core.config import settings
 from database.vector_store import VectorStoreManager
-from app.services.embedding_provider import OpenAIEmbeddingProvider
+from app.services.embedding_provider import OpenAIEmbeddingProvider, GeminiEmbeddingProvider
+from database.indexer import generate_deterministic_vector
+
+from retrieval.query_rewriter import QueryRewriter
 from database.indexer import generate_deterministic_vector
 
 logger = logging.getLogger(__name__)
@@ -61,7 +64,7 @@ class BM25Searcher:
             # Formule d'IDF classique lissée
             self.idf[word] = math.log((self.corpus_size - count + 0.5) / (count + 0.5) + 1.0)
 
-    def search(self, query: str, indices_filter: List[int] = None) -> List[Dict[str, Any]]:
+    def search(self, query: str, indices_filter: List[int] = None) -> List[Tuple[int, float]]:
         """
         Calcule les scores BM25 pour tous les documents ou une sous-sélection (filtre).
         """
@@ -154,13 +157,22 @@ class HybridSearchEngine:
             self.bm25 = None
             logger.warning("Corpus vide ! BM25 ne sera pas opérationnel.")
             
-        # Initialiser OpenAI Embedding Provider
+        # Initialiser le bon provider d'embeddings
+        gemini_key = settings.gemini_key
+        self.use_gemini = gemini_key and not gemini_key.startswith("mock-") and len(gemini_key.strip()) > 0
+
         api_key = settings.OPENAI_API_KEY
         self.use_openai = api_key and not api_key.startswith("mock-") and len(api_key.strip()) > 0
-        if self.use_openai:
+
+        if self.use_gemini:
+            self.emb_provider = GeminiEmbeddingProvider(api_key=gemini_key)
+        elif self.use_openai:
             self.emb_provider = OpenAIEmbeddingProvider(api_key=api_key)
         else:
             self.emb_provider = None
+
+        # Initialiser le Query Rewriter
+        self.rewriter = QueryRewriter()
 
     def _load_corpus(self):
         if not self.chunks_file.exists():
@@ -173,125 +185,148 @@ class HybridSearchEngine:
                     self.chunks.append(json.loads(line))
         logger.info(f"Chargement de {len(self.chunks)} chunks pour l'index lexical BM25.")
 
-    def search(self, query: str, top_k: int = 10, filter_dict: dict = None) -> List[Dict[str, Any]]:
+    def search(
+        self, 
+        query: str, 
+        top_k: int = 10, 
+        filter_dict: dict = None,
+        periode_cible: Optional[str] = None,
+        intervalle_cible: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Exécute la recherche hybride (Qdrant + BM25) avec pondération de score.
+        Exécute la recherche hybride avec réécriture et filtrage temporel.
         """
         if not self.chunks:
             return []
 
-        # 1. Obtenir le vecteur de requête sémantique
-        try:
-            if self.use_openai and self.emb_provider:
-                query_vector = self.emb_provider.get_embedding(query)
-            else:
-                query_vector = generate_deterministic_vector(query)
-        except Exception as e:
-            logger.error(f"Erreur vectorisation requête, fallback simulation : {e}")
-            query_vector = generate_deterministic_vector(query)
-
-        # 2. Recherche Sémantique (Qdrant)
-        # On remonte un pool large (ex: 50 résultats) pour fusionner ensuite
-        semantic_results = self.vector_store.search_semantic(
-            query_vector=query_vector,
-            top_k=min(50, len(self.chunks)),
-            filter_dict=filter_dict
-        )
+        # 1. Analyser la requête avec le rewriter (variations + extraction temporelle)
+        rewrite_res = self.rewriter.rewrite(query)
+        variations = rewrite_res["variations"]
         
-        semantic_map = {}
-        for hit in semantic_results:
-            # Récupérer l'ID unique (Qdrant point ID ou l'ID dans le payload)
-            point_id = hit.payload["metadata"]["id"]
-            semantic_map[point_id] = {
-                "score": hit.score,
-                "text": hit.payload["text"],
-                "parent_id": hit.payload["parent_id"],
-                "metadata": hit.payload["metadata"]
-            }
+        # Si non spécifiés explicitement en argument, on prend ce qu'a extrait le rewriter
+        if periode_cible is None:
+            periode_cible = rewrite_res["periode_cible"]
+        if intervalle_cible is None:
+            intervalle_cible = rewrite_res["intervalle_cible"]
 
-        # 3. Recherche Lexicale (BM25)
-        # Filtrer le corpus BM25 pour respecter le filtre de métadonnées
-        indices_filter = []
-        for idx, doc in enumerate(self.chunks):
-            if matches_metadata(doc["metadata"], filter_dict):
-                indices_filter.append(idx)
-                
-        bm25_results = []
-        if self.bm25 and indices_filter:
-            bm25_results = self.bm25.search(query, indices_filter=indices_filter)
+        logger.info(f"[Hybrid Engine] Période cible: {periode_cible} | Intervalle cible: {intervalle_cible}")
 
-        bm25_map = {}
-        for rank, (idx, score) in enumerate(bm25_results[:50]):
-            doc = self.chunks[idx]
-            point_id = doc["metadata"]["id"]
-            bm25_map[point_id] = {
-                "score": score,
-                "text": doc["text"],
-                "parent_id": doc["metadata"].get("parent_id", ""),  # Note : run_etl n'a pas encore le parent_id dans le jsonl
-                "metadata": doc["metadata"]
-            }
+        # Construire les filtres de métadonnées actifs (avec filtres temporels s'ils sont spécifiques)
+        active_filter = dict(filter_dict) if filter_dict else {}
+        if periode_cible != "global":
+            active_filter["metadata.periode"] = periode_cible
+        if intervalle_cible != "all":
+            active_filter["metadata.intervalle_temps"] = intervalle_cible
 
-        # 4. Fusion des scores (Min-Max Normalization)
-        # Récupérer l'union des IDs
-        all_ids = set(semantic_map.keys()).union(set(bm25_map.keys()))
-        
-        # Valeurs min/max pour normaliser les scores sémantiques (entre 0 et 1)
-        sem_scores = [val["score"] for val in semantic_map.values()]
-        min_sem = min(sem_scores) if sem_scores else 0.0
-        max_sem = max(sem_scores) if sem_scores else 1.0
-        sem_range = (max_sem - min_sem) if (max_sem - min_sem) > 0 else 1.0
+        # 2. Recherche hybride pour chaque variation et fusion des candidats
+        merged_candidates = {}
 
-        # Valeurs min/max pour normaliser les scores BM25
-        lex_scores = [val["score"] for val in bm25_map.values()]
-        min_lex = min(lex_scores) if lex_scores else 0.0
-        max_lex = max(lex_scores) if lex_scores else 1.0
-        lex_range = (max_lex - min_lex) if (max_lex - min_lex) > 0 else 1.0
+        for sub_query in variations:
+            # Recherche Sémantique (Qdrant)
+            try:
+                if self.emb_provider:
+                    query_vector = self.emb_provider.get_embedding(sub_query)
+                else:
+                    query_vector = generate_deterministic_vector(sub_query)
+            except Exception as e:
+                logger.error(f"Erreur vectorisation requête : {e}")
+                query_vector = generate_deterministic_vector(sub_query)
 
-        hybrid_results = []
-        
-        for pid in all_ids:
-            # 1. Score sémantique normalisé
-            if pid in semantic_map:
-                sem_raw = semantic_map[pid]["score"]
-                sem_norm = (sem_raw - min_sem) / sem_range
-                text = semantic_map[pid]["text"]
-                parent_id = semantic_map[pid]["parent_id"]
-                metadata = semantic_map[pid]["metadata"]
-            else:
-                sem_raw = 0.0
-                sem_norm = 0.0
-                # Charger le texte depuis la map BM25
-                text = bm25_map[pid]["text"]
-                metadata = bm25_map[pid]["metadata"]
-                # Générer le parent_id si manquant
-                import uuid
-                parent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, metadata["source"]))
-
-            # 2. Score BM25 normalisé
-            if pid in bm25_map:
-                lex_raw = bm25_map[pid]["score"]
-                lex_norm = (lex_raw - min_lex) / lex_range
-            else:
-                lex_raw = 0.0
-                lex_norm = 0.0
-
-            # Calcul du score hybride (70% Sémantique, 30% Lexical)
-            hybrid_score = 0.7 * sem_norm + 0.3 * lex_norm
+            semantic_results = self.vector_store.search_semantic(
+                query_vector=query_vector,
+                top_k=min(300, len(self.chunks)),
+                filter_dict=active_filter
+            )
             
-            hybrid_results.append({
-                "id": pid,
-                "text": text,
-                "parent_id": parent_id,
-                "metadata": metadata,
-                "scores": {
-                    "semantic_raw": sem_raw,
-                    "semantic_normalized": sem_norm,
-                    "lexical_raw": lex_raw,
-                    "lexical_normalized": lex_norm,
-                    "hybrid": hybrid_score
+            semantic_map = {}
+            for hit in semantic_results:
+                point_id = hit.payload["metadata"]["id"]
+                semantic_map[point_id] = {
+                    "score": hit.score,
+                    "text": hit.payload["text"],
+                    "parent_id": hit.payload["parent_id"],
+                    "metadata": hit.payload["metadata"]
                 }
-            })
 
-        # Trier par score hybride décroissant et renvoyer le top_k
-        hybrid_results.sort(key=lambda x: x["scores"]["hybrid"], reverse=True)
-        return hybrid_results[:top_k]
+            # Recherche Lexicale (BM25)
+            indices_filter = []
+            for idx, doc in enumerate(self.chunks):
+                if matches_metadata(doc["metadata"], active_filter):
+                    indices_filter.append(idx)
+                    
+            bm25_results = []
+            if self.bm25 and indices_filter:
+                bm25_results = self.bm25.search(sub_query, indices_filter=indices_filter)
+
+            bm25_map = {}
+            for rank, (idx, score) in enumerate(bm25_results[:50]):
+                doc = self.chunks[idx]
+                point_id = doc["metadata"]["id"]
+                bm25_map[point_id] = {
+                    "score": score,
+                    "text": doc["text"],
+                    "parent_id": doc["metadata"].get("parent_id", ""),
+                    "metadata": doc["metadata"]
+                }
+
+            # Fusion des scores (Min-Max Normalization) pour cette sous-requête
+            all_ids = set(semantic_map.keys()).union(set(bm25_map.keys()))
+            
+            sem_scores = [val["score"] for val in semantic_map.values()]
+            min_sem = min(sem_scores) if sem_scores else 0.0
+            max_sem = max(sem_scores) if sem_scores else 1.0
+            sem_range = (max_sem - min_sem) if (max_sem - min_sem) > 0 else 1.0
+
+            lex_scores = [val["score"] for val in bm25_map.values()]
+            min_lex = min(lex_scores) if lex_scores else 0.0
+            max_lex = max(lex_scores) if lex_scores else 1.0
+            lex_range = (max_lex - min_lex) if (max_lex - min_lex) > 0 else 1.0
+
+            for pid in all_ids:
+                if pid in semantic_map:
+                    sem_raw = semantic_map[pid]["score"]
+                    sem_norm = (sem_raw - min_sem) / sem_range
+                    text = semantic_map[pid]["text"]
+                    parent_id = semantic_map[pid]["parent_id"]
+                    metadata = semantic_map[pid]["metadata"]
+                else:
+                    sem_raw = 0.0
+                    sem_norm = 0.0
+                    text = bm25_map[pid]["text"]
+                    metadata = bm25_map[pid]["metadata"]
+                    import uuid
+                    parent_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, metadata["source"]))
+
+                if pid in bm25_map:
+                    lex_raw = bm25_map[pid]["score"]
+                    lex_norm = (lex_raw - min_lex) / lex_range
+                else:
+                    lex_raw = 0.0
+                    lex_norm = 0.0
+
+                # Score hybride (70% Sémantique, 30% Lexical)
+                hybrid_score = 0.7 * sem_norm + 0.3 * lex_norm
+                
+                candidate = {
+                    "id": pid,
+                    "text": text,
+                    "parent_id": parent_id,
+                    "metadata": metadata,
+                    "scores": {
+                        "semantic_raw": sem_raw,
+                        "semantic_normalized": sem_norm,
+                        "lexical_raw": lex_raw,
+                        "lexical_normalized": lex_norm,
+                        "hybrid": hybrid_score
+                    }
+                }
+
+                # Garder le candidat avec le meilleur score hybride
+                if pid not in merged_candidates or hybrid_score > merged_candidates[pid]["scores"]["hybrid"]:
+                    merged_candidates[pid] = candidate
+
+        # 3. Trier et retourner les résultats
+        sorted_candidates = list(merged_candidates.values())
+        sorted_candidates.sort(key=lambda x: x["scores"]["hybrid"], reverse=True)
+        return sorted_candidates[:top_k]
+

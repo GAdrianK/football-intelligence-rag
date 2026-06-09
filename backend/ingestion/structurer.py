@@ -103,6 +103,39 @@ class MarkdownHeaderSplitter:
             tags = extract_tactical_tags(full_text)
             chunk_type = determine_chunk_type(text, current_h1, current_h2)
             
+            # Extraction de la période et de l'intervalle de temps
+            periode = "global"
+            intervalle = "all"
+            
+            # 1. Recherche via les commentaires HTML d'annotation temporelle
+            time_match = re.search(r"<!--\s*@time:\s*periode=(\w+),\s*intervalle=([\w+-]+)\s*-->", full_text)
+            if time_match:
+                periode = time_match.group(1)
+                intervalle = time_match.group(2)
+            elif source_filename.startswith("match_"):
+                # 2. Heuristique textuelle si pas de commentaire (uniquement pour les rapports de match)
+                min_match = re.search(r"\b(\d{1,3})(?:e|ème)?\s*(?:minute|min|')", full_text, re.IGNORECASE)
+                if min_match:
+                    minute = int(min_match.group(1))
+                    if minute <= 45:
+                        periode = "1MT"
+                        if minute <= 15:
+                            intervalle = "0-15"
+                        elif minute <= 30:
+                            intervalle = "15-30"
+                        else:
+                            intervalle = "30-45"
+                    else:
+                        periode = "2MT"
+                        if minute <= 60:
+                            intervalle = "45-60"
+                        elif minute <= 75:
+                            intervalle = "60-75"
+                        elif minute <= 90:
+                            intervalle = "75-90"
+                        else:
+                            intervalle = "90+"
+
             # Génération d'un UUID unique pour le chunk
             chunk_id = str(uuid.uuid4())
             
@@ -111,7 +144,9 @@ class MarkdownHeaderSplitter:
                 source=source_filename,
                 equipes=teams,
                 tags_tactiques=tags,
-                type_chunk=chunk_type
+                type_chunk=chunk_type,
+                periode=periode,
+                intervalle_temps=intervalle
             )
             
             chunks.append(ProcessedChunk(

@@ -43,7 +43,8 @@ def run_advanced_retrieval_test(question: str):
 
     # 3. Query Rewriting (Multi-Query)
     print("1. [LLM Query Rewriter] Réécriture de la requête...")
-    rewritten_queries = rewriter.rewrite(question)
+    rewrite_res = rewriter.rewrite(question)
+    rewritten_queries = rewrite_res["variations"]
     print(f"   Requêtes générées ({len(rewritten_queries)}) :")
     for idx, req in enumerate(rewritten_queries):
         print(f"   [{idx + 1}] {req}")

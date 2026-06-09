@@ -12,7 +12,7 @@ sys.path.append(str(backend_dir))
 
 from qdrant_client.http.models import PointStruct
 from app.core.config import settings
-from app.services.embedding_provider import OpenAIEmbeddingProvider
+from app.services.embedding_provider import OpenAIEmbeddingProvider, GeminiEmbeddingProvider
 from database.vector_store import VectorStoreManager
 from database.parent_store import ParentStoreManager
 
@@ -53,8 +53,8 @@ def run_indexing():
     vector_store = VectorStoreManager()
     parent_store = ParentStoreManager()
 
-    # Re-créer la collection pour repartir sur une base propre
-    vector_store.init_collection(force_recreate=True)
+    # Ne pas forcer la récréation pour préserver les indexations précédentes
+    vector_store.init_collection(force_recreate=False)
 
     # Lecture des chunks
     chunks = []
@@ -65,11 +65,17 @@ def run_indexing():
 
     print(f"\nChargement de {len(chunks)} chunks enfants depuis chunks.jsonl...")
 
-    # Déterminer si on utilise l'API OpenAI ou le mode simulation
+    # Déterminer si on utilise l'API Gemini, OpenAI ou le mode simulation
+    gemini_key = settings.gemini_key
+    use_gemini = gemini_key and not gemini_key.startswith("mock-") and len(gemini_key.strip()) > 0
+
     api_key = settings.OPENAI_API_KEY
     use_openai = api_key and not api_key.startswith("mock-") and len(api_key.strip()) > 0
     
-    if use_openai:
+    if use_gemini:
+        print("Mode : Gemini Embeddings (En ligne)")
+        emb_provider = GeminiEmbeddingProvider(api_key=gemini_key)
+    elif use_openai:
         print("Mode : OpenAI Embeddings (En ligne)")
         emb_provider = OpenAIEmbeddingProvider(api_key=api_key)
     else:
@@ -85,7 +91,7 @@ def run_indexing():
         source_name = metadata["source"]
         chunk_id = metadata["id"]
 
-        # 1. Gestion du document parent (SQLite)
+        # 1. Gestion du document parent (SQLite) avec logique d'Upsert
         # Génération d'un parent_id unique et déterministe basé sur le nom du fichier source
         parent_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, source_name))
         
@@ -96,7 +102,28 @@ def run_indexing():
                     with open(parent_file_path, "r", encoding="utf-8") as f_parent:
                         parent_content = f_parent.read()
                     
-                    # Sauvegarder dans SQLite
+                    # Si le parent est déjà indexé, on fait un Upsert en nettoyant d'abord Qdrant
+                    if parent_store.exists(parent_uuid):
+                        print(f"[UPSERT] Le document {source_name} est déjà indexé. Nettoyage des anciens points dans Qdrant...")
+                        from qdrant_client.http import models as qdrant_models
+                        try:
+                            vector_store.client.delete(
+                                collection_name=vector_store.collection_name,
+                                points_selector=qdrant_models.FilterSelector(
+                                    filter=qdrant_models.Filter(
+                                        must=[
+                                            qdrant_models.FieldCondition(
+                                                key="parent_id",
+                                                match=qdrant_models.MatchValue(value=parent_uuid)
+                                            )
+                                        ]
+                                    )
+                                )
+                            )
+                        except Exception as delete_error:
+                            print(f"[WARNING] Erreur lors de la suppression de points : {delete_error}")
+
+                    # Sauvegarder dans SQLite (INSERT OR REPLACE)
                     parent_store.save_parent(
                         parent_id=parent_uuid,
                         source_name=source_name,
@@ -138,6 +165,12 @@ def run_indexing():
     if points_to_upsert:
         vector_store.upsert_points(points_to_upsert)
         
+    # Fermeture explicite du client pour libérer le verrou
+    try:
+        vector_store.client.close()
+    except Exception:
+        pass
+
     print("==================================================")
     print("          INDEXATION PIPELINE TERMINÉE            ")
     print("==================================================")

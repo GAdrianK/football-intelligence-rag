@@ -1,3 +1,4 @@
+import os
 import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -14,17 +15,21 @@ class VectorStoreManager:
     _client_instance = None
 
     def __init__(self):
-        url = settings.QDRANT_URL
-        if url == ":memory:":
-            if VectorStoreManager._client_instance is None:
-                logger.info("Initialisation de Qdrant en mode mémoire (:memory:) partagé")
-                VectorStoreManager._client_instance = QdrantClient(location=":memory:")
-            self.client = VectorStoreManager._client_instance
-        else:
-            logger.info(f"Connexion au serveur Qdrant sur : {url}")
-            self.client = QdrantClient(url=url)
-            
         self.collection_name = settings.QDRANT_COLLECTION_NAME
+        
+        # Singleton pattern pour éviter les verrous d'accès concurrents sur Qdrant local
+        if VectorStoreManager._client_instance is None:
+            url = settings.QDRANT_URL
+            if url == ":memory:":
+                # Utilise un stockage local persistant sous backend/data/qdrant_local
+                qdrant_path = os.path.abspath(os.path.join(settings.get_processed_data_dir(), "..", "qdrant_local"))
+                logger.info(f"Initialisation de Qdrant local persistant sur : {qdrant_path}")
+                VectorStoreManager._client_instance = QdrantClient(path=qdrant_path)
+            else:
+                logger.info(f"Connexion au serveur Qdrant sur : {url}")
+                VectorStoreManager._client_instance = QdrantClient(url=url)
+                
+        self.client = VectorStoreManager._client_instance
 
 
     def init_collection(self, force_recreate: bool = False):
@@ -60,7 +65,9 @@ class VectorStoreManager:
             ("metadata.equipes", models.PayloadSchemaType.KEYWORD),
             ("metadata.tags_tactiques", models.PayloadSchemaType.KEYWORD),
             ("metadata.type_chunk", models.PayloadSchemaType.KEYWORD),
-            ("metadata.source", models.PayloadSchemaType.KEYWORD)
+            ("metadata.source", models.PayloadSchemaType.KEYWORD),
+            ("metadata.periode", models.PayloadSchemaType.KEYWORD),
+            ("metadata.intervalle_temps", models.PayloadSchemaType.KEYWORD)
         ]
 
         for field_name, schema_type in fields_to_index:
