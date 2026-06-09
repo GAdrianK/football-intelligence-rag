@@ -34,13 +34,15 @@ app = FastAPI(
 app.include_router(chat_router)
 app.include_router(pdf_router)
 
-# Configuration CORS pour autoriser toutes les origines
+# =================================================================
+# CONFIGURATION DU MIDDLEWARE CORS (L'anti-NetworkError)
+# =================================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],         # Autorise toutes les origines (indispensable en local)
+    allow_credentials=True,
+    allow_methods=["*"],         # Autorise toutes les méthodes (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],         # Autorise tous les en-têtes (Content-Type, etc.)
 )
 
 # Instance globale du moteur RAG
