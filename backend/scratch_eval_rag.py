@@ -43,7 +43,7 @@ def run_evaluation():
         ("C'est quoi le \"Football Total\" de l'Ajax et des Pays-Bas dans les années 1970 ?", ["history_tactics_total_football.md"]),
         ("Comment Arrigo Sacchi a-t-il révolutionné la défense avec son Milan AC à la fin des années 80 ?", ["history_tactics_arrigo_sacchi_milan.md"]),
         ("Pourquoi les gardiens relancent-ils court maintenant au lieu de dégager loin devant ?", ["sortie_balle.md"]),
-        ("Pourquoi on dit qu'un ailier joue en \"faux pied\" ou \"inversé\" ?", ["player_roles_offensive_inverted_fullback.md"])
+        ("Pourquoi on dit qu'un ailier joue en \"faux pied\" ou \"inversé\" ?", ["player_roles_offensive_inverted_winger.md"])
     ]
 
     total_score = 0
