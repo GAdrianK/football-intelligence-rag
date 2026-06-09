@@ -8,6 +8,8 @@ from app.core.config import settings
 from app.services.rag_engine import RAGEngine
 from app.api.chat import router as chat_router
 from app.api.pdf import router as pdf_router
+from app.database.sql_store import engine, Base
+from app.models.player_stats import PlayerMatchStats
 
 # Importation du pipeline de recherche avancée
 from retrieval.hybrid_engine import HybridSearchEngine
@@ -277,6 +279,8 @@ async def analyze_trends(request: TrendsRequest):
 
 @app.on_event("startup")
 async def startup_event():
+    # Création des tables SQL si elles n'existent pas
+    Base.metadata.create_all(bind=engine)
     # S'assurer que les variables de configuration sont chargées correctement (au moins une clé LLM)
     assert settings.OPENAI_API_KEY is not None or settings.gemini_key != "", "Aucune clé API (OpenAI ou Gemini) n'a pu être chargée !"
     # Initialiser le RAG
