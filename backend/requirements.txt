@@ -12,3 +12,4 @@ flashrank>=0.2.0
 soccerdata>=1.4.0
 pandas>=2.0.0
 sqlalchemy>=2.0.0
+lxml>=4.9.0

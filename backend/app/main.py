@@ -1,15 +1,17 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.rag_engine import RAGEngine
 from app.api.chat import router as chat_router
 from app.api.pdf import router as pdf_router
-from app.database.sql_store import engine, Base
+from app.database.sql_store import engine, Base, get_sql_db
 from app.models.player_stats import PlayerMatchStats
+from app.services.extractor_engine import FootballScraperEngine
 
 # Importation du pipeline de recherche avancée
 from retrieval.hybrid_engine import HybridSearchEngine
@@ -275,6 +277,22 @@ async def analyze_trends(request: TrendsRequest):
         matches_analyzed=result["matches_analyzed"],
         chunks_used=result["chunks_used"],
     )
+
+
+class ScrapeMatchRequest(BaseModel):
+    url: str
+    match_id: str
+
+@app.post("/api/scrape-match")
+async def scrape_match(request: ScrapeMatchRequest, db: Session = Depends(get_sql_db)):
+    """
+    Scrape les stats FBref d'un match et les enregistre dans SQLite.
+    """
+    scraper = FootballScraperEngine()
+    result_msg = scraper.fetch_and_save_match_stats(request.url, request.match_id, db)
+    if result_msg.startswith("Erreur"):
+        return {"status": "error", "message": result_msg}
+    return {"status": "success", "message": result_msg}
 
 
 @app.on_event("startup")
