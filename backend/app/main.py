@@ -34,12 +34,11 @@ app = FastAPI(
 app.include_router(chat_router)
 app.include_router(pdf_router)
 
-# Configuration CORS pour autoriser le frontend (local ou distant)
-origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",") if origin.strip()]
+# Configuration CORS pour autoriser toutes les origines
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
