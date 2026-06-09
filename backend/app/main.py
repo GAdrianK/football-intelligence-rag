@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -9,9 +9,10 @@ from app.core.config import settings
 from app.services.rag_engine import RAGEngine
 from app.api.chat import router as chat_router
 from app.api.pdf import router as pdf_router
-from app.database.sql_store import engine, Base, get_sql_db
+from app.database.sql_store import engine, Base, get_sql_db, SessionLocal
 from app.models.player_stats import PlayerMatchStats
 from app.services.extractor_engine import FootballScraperEngine
+from app.services.bulk_ingestion import run_bulk_ingestion
 
 # Importation du pipeline de recherche avancée
 from retrieval.hybrid_engine import HybridSearchEngine
@@ -293,6 +294,41 @@ async def scrape_match(request: ScrapeMatchRequest, db: Session = Depends(get_sq
     if result_msg.startswith("Erreur"):
         return {"status": "error", "message": result_msg}
     return {"status": "success", "message": result_msg}
+
+
+class BulkScrapeMatchItem(BaseModel):
+    url: str
+    match_id: str
+
+
+class BulkScrapeRequest(BaseModel):
+    matches: List[BulkScrapeMatchItem]
+
+
+def background_bulk_scrape(matches: List[Dict[str, str]]):
+    import logging
+    logger = logging.getLogger("app.main")
+    logger.info(f"[BackgroundScrape] Démarrage de l'ingestion de {len(matches)} matches...")
+    db = SessionLocal()
+    try:
+        run_bulk_ingestion(matches, db)
+    except Exception as e:
+        logger.error(f"[BackgroundScrape] Erreur lors de l'ingestion en arrière-plan : {e}")
+    finally:
+        db.close()
+
+
+@app.post("/api/bulk-scrape")
+async def bulk_scrape(request: BulkScrapeRequest, background_tasks: BackgroundTasks):
+    """
+    Lance l'ingestion de masse en arrière-plan (non bloquant).
+    """
+    match_list = [{"url": m.url, "match_id": m.match_id} for m in request.matches]
+    background_tasks.add_task(background_bulk_scrape, match_list)
+    return {
+        "status": "pending",
+        "message": f"Ingestion de masse lancée pour {len(match_list)} matches en arrière-plan."
+    }
 
 
 @app.on_event("startup")
