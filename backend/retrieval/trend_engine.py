@@ -24,6 +24,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from collections import defaultdict
+from sqlalchemy import func, or_
 
 from openai import OpenAI
 
@@ -35,6 +36,8 @@ from database.vector_store import VectorStoreManager
 from database.parent_store import ParentStoreManager
 from database.indexer import generate_deterministic_vector
 from app.services.embedding_provider import OpenAIEmbeddingProvider
+from app.database.sql_store import SessionLocal
+from app.models.player_stats import PlayerMatchStats
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,7 @@ class TrendAnalysisEngine:
     def __init__(self):
         self.vector_store = VectorStoreManager()
         self.parent_store = ParentStoreManager()
+        self.db_session_factory = SessionLocal
 
         # Charger tous les chunks depuis chunks.jsonl pour filtrage BM25 / métadonnées
         chunks_file = Path(settings.get_processed_data_dir()) / "chunks.jsonl"
@@ -293,33 +297,122 @@ class TrendAnalysisEngine:
     # ------------------------------------------------------------------
     # Génération LLM de la synthèse comparative
     # ------------------------------------------------------------------
+    def _normalize_name(self, name: str) -> str:
+        import unicodedata
+        name = unicodedata.normalize('NFD', name)
+        return "".join(c for c in name if unicodedata.category(c) != 'Mn').lower()
+
+    def _get_sql_stats(self, player_names: list[str]) -> str:
+        """
+        Fait une requête d'agrégation (SUM, AVG) sur la table player_match_stats
+        pour extraire les statistiques cumulées de la saison des joueurs concernés.
+        """
+        session = self.db_session_factory()
+        try:
+            # Récupérer toutes les lignes pour pouvoir filtrer de façon accent-insensitive en Python
+            all_stats = session.query(PlayerMatchStats).all()
+            if not all_stats:
+                return "Aucune donnée statistique (SQL) disponible."
+
+            # Organiser par joueur
+            player_groups = defaultdict(list)
+            for row in all_stats:
+                player_groups[row.player_name].append(row)
+
+            # Si on a des filtres, on filtre de manière insensible aux accents
+            normalized_filters = [self._normalize_name(p) for p in player_names] if player_names else []
+
+            sql_results = []
+            for name, rows in player_groups.items():
+                norm_name = self._normalize_name(name)
+                # Vérifier si le joueur correspond à l'un des filtres
+                if normalized_filters:
+                    matches_filter = False
+                    for f in normalized_filters:
+                        if f in norm_name:
+                            matches_filter = True
+                            break
+                    if not matches_filter:
+                        continue
+
+                # Faire les agrégations
+                matches = len(rows)
+                total_minutes = sum(r.minutes_played for r in rows)
+                total_goals = sum(r.goals for r in rows)
+                total_xg = sum(r.expected_goals for r in rows if r.expected_goals is not None)
+                total_xa = sum(r.expected_assists for r in rows if r.expected_assists is not None)
+                total_key_passes = sum(r.key_passes for r in rows if r.key_passes is not None)
+                total_progressive_dribbles = sum(r.progressive_dribbles for r in rows if r.progressive_dribbles is not None)
+                total_defensive_pressures = sum(r.defensive_pressures for r in rows if r.defensive_pressures is not None)
+
+                sql_results.append({
+                    "player_name": name,
+                    "matches": matches,
+                    "total_minutes": total_minutes,
+                    "total_goals": total_goals,
+                    "total_xg": total_xg,
+                    "total_xa": total_xa,
+                    "total_key_passes": total_key_passes,
+                    "total_progressive_dribbles": total_progressive_dribbles,
+                    "total_defensive_pressures": total_defensive_pressures,
+                })
+
+            if not sql_results:
+                return "Aucune donnée statistique (SQL) disponible."
+
+            sql_markdown = (
+                "| Joueur | Matchs | Minutes | Buts | xG cumulé | xA cumulé | Passes Clés | Dribbles Prog. | Pressions Déf. |\n"
+                "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n"
+            )
+            for r in sql_results:
+                total_xg = r["total_xg"]
+                total_xa = r["total_xa"]
+                sql_markdown += f"| {r['player_name']} | {r['matches']} | {r['total_minutes']} | {r['total_goals']} | {total_xg:.2f} | {total_xa:.2f} | {r['total_key_passes']} | {r['total_progressive_dribbles']} | {r['total_defensive_pressures']} |\n"
+            
+            return sql_markdown
+        except Exception as e:
+            logger.error(f"[TrendEngine] Erreur SQL : {e}")
+            return f"Erreur lors de la récupération des stats SQL : {e}"
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    # Génération LLM de la synthèse comparative
+    # ------------------------------------------------------------------
     def _generate_synthesis(
         self,
         query: str,
         structured_context: str,
+        sql_context: str,
         competitions: Optional[list[str]] = None,
     ) -> str:
         """
-        Envoie le contexte multi-match structuré à GPT-4o pour synthèse.
+        Envoie le contexte multi-match structuré et les données SQL à Gemini pour synthèse.
         """
         comp_hint = ""
         if competitions:
             comp_hint = f"\nL'utilisateur s'intéresse particulièrement aux compétitions : {', '.join(competitions)}."
 
         system_prompt = f"""Tu es un ingénieur tactique d'élite travaillant pour un département analytique de football professionnel.
-Tu reçois des données réelles et factuelles provenant de plusieurs matchs du Paris Saint-Germain, structurées match par match.
+Tu reçois deux sources de données distinctes sur le Paris Saint-Germain :
+1. Données Statistiques Réelles (SQL) : Statistiques cumulées froides de la saison issues de notre base de données relationnelle.
+2. Contextes Isolés (Qdrant) : Comptes-rendus textuels et notes tactiques match par match.
+
 Ta mission : produire une **synthèse comparative, analytique et évolutive** en répondant à la question posée.
 
-Règles impératives :
-1. Ne pas inventer de faits. Utilise UNIQUEMENT les données fournies dans les blocs MATCH.
-2. Organise ta réponse avec des sections Markdown claires (##, ###, tableaux).
-3. Commence par un **tableau comparatif** des indicateurs clés si plusieurs matchs sont analysés.
-4. Puis développe une **analyse narrative** par thème (offensif, défensif, individuel).
-5. Termine par une **synthèse en 3 points clés** (forces, faiblesses, évolutions).
+Règles impératives de fusion hybride :
+1. Utilise IMPÉRATIVEMENT les chiffres du SQL comme vérité absolue et incontestable pour tous les calculs statistiques et volumes de performances.
+2. Utilise le contexte textuel de Qdrant pour expliquer le style de jeu, l'animation sur le terrain, le pressing et l'explication tactique.
+3. Ne pas inventer de chiffres ni de faits qui ne figurent pas dans les données ci-dessous.
+4. Organise ta réponse avec des sections Markdown claires (##, ###, tableaux).
+5. Commence par présenter un tableau ou récapitulatif des données de performance réelles.
 6. Réponds en français.{comp_hint}
-7. Évaluation tactique globale des joueurs : Ne favorise pas uniquement les buteurs ou passeurs décisifs directs (comme Bradley Barcola). Valorise à leur juste mesure l'impact global sur le jeu, la création d'occasions (passes clés, dribbles créateurs d'espace, expected assists - xA), le pressing défensif et la régularité sur toute la saison (comme celle d'Ousmane Dembélé). Analyse l'apport collectif au-delà de la simple finition.
+7. Évaluation tactique globale des joueurs : Analyse l'apport collectif au-delà de la simple finition. Prends en compte l'impact global, la création d'occasions (passes clés, expected assists - xA, dribbles progressifs) et le pressing défensif (pressions défensives).
 
-Contexte multi-match (données réelles) :
+Données Statistiques Réelles (SQL) :
+{sql_context}
+
+Contextes Isolés (Qdrant) :
 {structured_context}
 """
 
@@ -356,18 +449,20 @@ Contexte multi-match (données réelles) :
                 return response.choices[0].message.content
             except Exception as e:
                 logger.error(f"[TrendEngine] Erreur GPT-4o : {e}")
-                return self._mock_synthesis(query, structured_context)
+                return self._mock_synthesis(query, structured_context, sql_context)
         else:
-            return self._mock_synthesis(query, structured_context)
+            return self._mock_synthesis(query, structured_context, sql_context)
 
-    def _mock_synthesis(self, query: str, context: str) -> str:
+    def _mock_synthesis(self, query: str, context: str, sql_context: str) -> str:
         """Synthèse de démonstration quand OpenAI/Gemini ne sont pas disponibles."""
-        match_count = context.count("═" * 10)
+        match_count = context.count("MATCH :")
         return (
             f"## Synthèse Comparative Multi-Match (Mode Local)\n\n"
             f"**Requête :** {query}\n\n"
-            f"**Matchs analysés :** {match_count} match(s) isolé(s) dans la base de données.\n\n"
-            f"### Contexte récupéré\n"
+            f"**Matchs analysés (Qdrant) :** {match_count} match(s) isolé(s) dans la base de données.\n\n"
+            f"### Données SQL Réelles\n"
+            f"{sql_context}\n\n"
+            f"### Contexte Qdrant récupéré\n"
             f"```\n{context[:800]}...\n```\n\n"
             f"> ℹ️ Synthèse indisponible en mode local (clé mock). "
             f"Configurez une clé API Google Gemini ou OpenAI dans `.env` pour la génération complète."
@@ -382,19 +477,7 @@ Contexte multi-match (données réelles) :
         competitions: Optional[list[str]] = None,
     ) -> dict:
         """
-        Lance l'analyse de tendances complète.
-
-        Args:
-            query: La question macro / comparative de l'utilisateur.
-            competitions: Filtre optionnel de compétitions (["UCL", "Ligue 1"]).
-
-        Returns:
-            {
-              "synthesis": str,          # Rapport markdown
-              "matches_analyzed": list,  # Noms des fichiers sources utilisés
-              "chunks_used": int,        # Nombre de chunks analysés
-              "context_preview": str,    # Aperçu du contexte envoyé au LLM
-            }
+        Lance l'analyse de tendances hybride (SQL + Qdrant).
         """
         logger.info(f"[TrendEngine] Requête : {query!r}")
 
@@ -402,16 +485,19 @@ Contexte multi-match (données réelles) :
         targets = self._extract_targets(query)
         logger.info(f"[TrendEngine] Cibles extraites : {targets}")
 
-        # 2. Filtrer et grouper les chunks
+        # 2. Filtrer et grouper les chunks (Qdrant)
         grouped = self._filter_chunks_by_targets(targets)
         total_chunks = sum(len(v) for v in grouped.values())
         logger.info(f"[TrendEngine] {len(grouped)} matchs isolés, {total_chunks} chunks.")
 
-        # 3. Construire le contexte structuré
+        # 3. Récupérer les stats cumulées (SQL)
+        sql_context = self._get_sql_stats(targets["player_names"])
+
+        # 4. Construire le contexte structuré
         structured_context = self._build_structured_context(grouped)
 
-        # 4. Générer la synthèse
-        synthesis = self._generate_synthesis(query, structured_context, competitions)
+        # 5. Générer la synthèse
+        synthesis = self._generate_synthesis(query, structured_context, sql_context, competitions)
 
         return {
             "synthesis": synthesis,
