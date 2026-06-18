@@ -8,7 +8,7 @@ def main():
     # 1. Téléchargement automatique via kagglehub
     print("⏳ Téléchargement du dernier dataset depuis Kaggle...")
     try:
-        download_path = kagglehub.dataset_download("hubertsidorowicz/football-players-stats-2024-2025")
+        download_path = kagglehub.dataset_download("hubertsidorowicz/football-players-stats-2025-2026")
         print(f"✅ Dataset récupéré avec succès dans : {download_path}")
     except Exception as e:
         print(f"❌ Erreur lors du téléchargement Kaggle : {str(e)}")
@@ -86,7 +86,7 @@ def main():
         pressions = int(goals * 4 + key_passes * 2) # Simulation cohérente si non fournie dans ce CSV
         
         # Identifiant unique pour ce bloc global
-        match_id = "season_2024_2025_summary"
+        match_id = "season_2025_2026_summary"
 
         try:
             cursor.execute("""
