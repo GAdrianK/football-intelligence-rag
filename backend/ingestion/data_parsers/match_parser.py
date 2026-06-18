@@ -29,9 +29,11 @@ class MatchDataParser:
     def __init__(self):
         self.gemini_key = settings.gemini_key
         self.openai_key = settings.OPENAI_API_KEY
+        self.openrouter_key = settings.openrouter_key
         self.use_gemini = self.gemini_key and not self.gemini_key.startswith("mock-") and len(self.gemini_key.strip()) > 0
         self.use_openai = self.openai_key and not self.openai_key.startswith("mock-") and len(self.openai_key.strip()) > 0
-        self.use_llm = self.use_gemini or self.use_openai
+        self.use_openrouter = self.openrouter_key and not self.openrouter_key.startswith("mock-") and len(self.openrouter_key.strip()) > 0
+        self.use_llm = self.use_gemini or self.use_openai or self.use_openrouter
 
     def load_json(self, json_path: str) -> dict:
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -76,7 +78,33 @@ class MatchDataParser:
         6. Intègre toutes les statistiques globales (possession, passes, tirs, xG, PPDA, style de bloc) dans les sections H2 correspondantes.
         7. N'invente pas de faits non inclus dans le JSON. Reste purement focalisé sur la prose footballistique analytique et technique.
         """
-        if self.use_gemini:
+        if self.use_openrouter:
+            try:
+                client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self.openrouter_key
+                )
+                try:
+                    response = client.chat.completions.create(
+                        model="qwen/qwen-2.5-72b-instruct:free",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.2
+                    )
+                    return response.choices[0].message.content
+                except Exception as e:
+                    print(f"[WARNING] Erreur OpenRouter Qwen gratuit dans match_parser : {e}. Tentative avec la version payante.")
+                    response = client.chat.completions.create(
+                        model="qwen/qwen-2.5-72b-instruct",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.2
+                    )
+                    return response.choices[0].message.content
+            except Exception as e2:
+                print(f"Erreur OpenRouter dans _generate_via_llm: {e2}")
+                if not self.use_gemini and not self.use_openai:
+                    raise e2
+
+        if self.use_gemini and not self.use_openrouter:
             try:
                 from google import genai
                 client = genai.Client(api_key=self.gemini_key)
@@ -90,7 +118,7 @@ class MatchDataParser:
                 if not self.use_openai:
                     raise e
         
-        if self.use_openai:
+        if self.use_openai and not self.use_gemini and not self.use_openrouter:
             client = OpenAI(api_key=self.openai_key)
             response = client.chat.completions.create(
                 model="gpt-4o-mini",

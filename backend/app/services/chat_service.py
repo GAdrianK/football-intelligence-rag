@@ -19,6 +19,8 @@ class ChatService:
         self.rag_engine = rag_engine
         self.api_key = openai_api_key
         self.gemini_api_key = gemini_api_key
+        self.openrouter_key = settings.openrouter_key
+        self.use_openrouter = self.openrouter_key and not self.openrouter_key.startswith("mock-") and len(self.openrouter_key.strip()) > 0
         self.prompts: Dict[ChatMode, str] = {}
         self.classifier = QueryClassifier()
         self._load_prompts()
@@ -119,11 +121,56 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
 [MESSAGE DE L'UTILISATEUR]
 {request.message}"""
 
-        # 4. Génération (Gemini, OpenAI ou Fallback Mock local)
+        # 4. Génération (OpenRouter, Gemini, OpenAI ou Fallback Mock local)
+        use_openrouter = self.use_openrouter
         use_gemini = self.gemini_api_key and not self.gemini_api_key.startswith("mock-") and len(self.gemini_api_key.strip()) > 0
         use_openai = self.api_key and not self.api_key.startswith("mock-") and len(self.api_key.strip()) > 0
 
-        if use_gemini:
+        if use_openrouter:
+            try:
+                client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self.openrouter_key
+                )
+                
+                messages = [{"role": "system", "content": system_prompt}]
+                if request.history:
+                    for h in request.history[-5:]:
+                        messages.append({"role": h.role, "content": h.content})
+                        
+                messages.append({"role": "user", "content": user_prompt})
+                
+                try:
+                    response = client.chat.completions.create(
+                        model="qwen/qwen-2.5-72b-instruct:free",
+                        messages=messages,
+                        temperature=0.2
+                    )
+                    answer = response.choices[0].message.content
+                    return ChatResponse(
+                        answer=answer,
+                        mode=request.mode,
+                        sources=sources
+                    )
+                except Exception as e:
+                    print(f"[WARNING] Erreur OpenRouter Qwen gratuit dans le chat : {e}. Tentative avec la version payante.")
+                    response = client.chat.completions.create(
+                        model="qwen/qwen-2.5-72b-instruct",
+                        messages=messages,
+                        temperature=0.2
+                    )
+                    answer = response.choices[0].message.content
+                    return ChatResponse(
+                        answer=answer,
+                        mode=request.mode,
+                        sources=sources
+                    )
+            except Exception as e2:
+                print(f"Erreur lors de l'appel OpenRouter dans le chat : {e2}.")
+                if not use_gemini and not use_openai:
+                    raise e2
+
+        if use_gemini and not use_openrouter:
             try:
                 from google import genai
                 from google.genai import types
@@ -166,7 +213,7 @@ Base-toi uniquement sur le contexte ci-dessus si présent pour répondre à la q
                 print(f"Erreur lors de l'appel Gemini : {e}.")
                 raise e
 
-        if use_openai and not use_gemini: # ou si gemini a échoué
+        if use_openai and not use_gemini and not use_openrouter: # ou si gemini/openrouter ont échoué
             try:
                 client = OpenAI(api_key=self.api_key)
                 

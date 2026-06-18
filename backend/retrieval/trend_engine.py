@@ -104,6 +104,11 @@ class TrendAnalysisEngine:
         else:
             logger.warning("[TrendEngine] chunks.jsonl introuvable.")
 
+        # OpenRouter
+        openrouter_key = settings.openrouter_key
+        self.openrouter_key = openrouter_key
+        self.use_openrouter = openrouter_key and not openrouter_key.startswith("mock-") and len(openrouter_key.strip()) > 0
+
         # Gemini
         gemini_key = settings.gemini_key
         self.gemini_key = gemini_key
@@ -122,6 +127,15 @@ class TrendAnalysisEngine:
             self.emb_provider = None
 
         self.openai_client = OpenAI(api_key=api_key) if self.use_openai else None
+
+        # Client OpenRouter
+        if self.use_openrouter:
+            self.openrouter_client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.openrouter_key
+            )
+        else:
+            self.openrouter_client = None
 
     # ------------------------------------------------------------------
     # Extraction des cibles depuis la requête
@@ -416,7 +430,36 @@ Contextes Isolés (Qdrant) :
 {structured_context}
 """
 
-        if self.use_gemini:
+        if self.use_openrouter and self.openrouter_client:
+            try:
+                response = self.openrouter_client.chat.completions.create(
+                    model="qwen/qwen-2.5-72b-instruct:free",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": query},
+                    ],
+                    temperature=0.2,
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"[TrendEngine] Erreur OpenRouter Qwen : {e}")
+                # En cas d'erreur de la version gratuite d'OpenRouter, on essaie la version payante standard
+                try:
+                    response = self.openrouter_client.chat.completions.create(
+                        model="qwen/qwen-2.5-72b-instruct",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": query},
+                        ],
+                        temperature=0.2,
+                    )
+                    return response.choices[0].message.content
+                except Exception as e2:
+                    logger.error(f"[TrendEngine] Erreur OpenRouter Qwen (payant) : {e2}")
+                    if not self.use_gemini and not self.use_openai:
+                        raise e2
+
+        if self.use_gemini and not self.use_openrouter:
             try:
                 from google import genai
                 from google.genai import types
@@ -435,7 +478,7 @@ Contextes Isolés (Qdrant) :
                 logger.error(f"[TrendEngine] Erreur Gemini : {e}")
                 raise e
 
-        if self.use_openai and self.openai_client and not self.use_gemini:
+        if self.use_openai and self.openai_client and not self.use_gemini and not self.use_openrouter:
             try:
                 response = self.openai_client.chat.completions.create(
                     model="gpt-4o",

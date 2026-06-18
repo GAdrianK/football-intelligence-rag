@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     APISPORTS_KEY: str = ""
     HOST: str = "0.0.0.0"
     PORT: int = 8000
@@ -19,6 +20,10 @@ class Settings(BaseSettings):
         # Préférer GEMINI_API_KEY puis GOOGLE_API_KEY
         key = self.GEMINI_API_KEY or self.GOOGLE_API_KEY or ""
         return key.strip()
+
+    @property
+    def openrouter_key(self) -> str:
+        return self.OPENROUTER_API_KEY.strip()
     ALLOWED_ORIGINS: str = "*"
 
     RAW_DATA_DIR: str = ""

@@ -119,7 +119,10 @@ async def analyze_match(request: AnalysisRequest):
 
     context_text = "\n\n---\n\n".join(context_documents) if context_documents else "Aucune fiche tactique pertinente trouvée."
 
-    # 2. Appel Gemini (si clé présente) ou OpenAI Structured Outputs (ou Fallback Mock)
+    # 2. Appel OpenRouter/Qwen (si clé présente) ou Gemini ou OpenAI Structured Outputs (ou Fallback Mock)
+    openrouter_key = settings.openrouter_key
+    use_openrouter = openrouter_key and not openrouter_key.startswith("mock-") and len(openrouter_key.strip()) > 0
+
     gemini_key = settings.gemini_key
     use_gemini = gemini_key and not gemini_key.startswith("mock-") and len(gemini_key.strip()) > 0
     
@@ -135,7 +138,61 @@ async def analyze_match(request: AnalysisRequest):
         f"{context_text}"
     )
 
-    if use_gemini:
+    if use_openrouter:
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=openrouter_key
+            )
+            schema_instruction = (
+                "\n\nIMPORTANT : Tu dois renvoyer STRICTEMENT un objet JSON valide conforme au schéma TacticalReportSchema.\n"
+                "Le JSON doit obligatoirement avoir les champs suivants :\n"
+                "- titre: str\n"
+                "- match_ou_sujet: str\n"
+                "- organisation_offensive: objet avec les champs (creation, espaces, largeur, profondeur)\n"
+                "- transitions_off_def: objet avec les champs (repli_collectif, contre_pressing, zones_a_securiser)\n"
+                "- organisation_defensive: objet avec les champs (hauteur_bloc, compacite_verticale_horizontale, cadrage_porteur, gestion_profondeur)\n"
+                "- transitions_def_off: objet avec les champs (premiere_passe_relance, projection_verticale, securisation_possession)\n"
+                "- coups_de_pied_arretes: objet avec les champs (corners_offensifs, coups_francs_offensifs, organisation_defensive_cpa)\n"
+                "- animation_couloirs: objet avec les champs (role_lateraux, surcharges_ailiers)\n"
+                "- gestion_interlignes: objet avec les champs (positionnement_receveur, blocage_passes_adversaires)\n"
+                "- pressage_declencheurs: objet avec les champs (hauteur_pressing, triggers_declenchement, couverture_derriere)\n"
+                "- faiblesses_a_exploiter: objet avec les champs (zones_vulnerables, joueurs_cibles)\n"
+                "- consignes_individuelles: liste d'objets avec les champs (nom_joueur, role_tactique, consigne_cle)\n"
+            )
+            response = client.chat.completions.create(
+                model="qwen/qwen-2.5-72b-instruct:free",
+                messages=[
+                    {"role": "system", "content": system_prompt + schema_instruction},
+                    {"role": "user", "content": f"Génère le rapport tactique complet pour : '{query}'"}
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"}
+            )
+            report_text = response.choices[0].message.content
+            report = TacticalReportSchema.model_validate_json(report_text)
+            return AnalysisResponse(report=report, sources=sources)
+        except Exception as e:
+            print(f"[WARNING] Erreur OpenRouter Qwen gratuit lors de l'analyse : {e}. Tentative avec la version payante.")
+            try:
+                response = client.chat.completions.create(
+                    model="qwen/qwen-2.5-72b-instruct",
+                    messages=[
+                        {"role": "system", "content": system_prompt + schema_instruction},
+                        {"role": "user", "content": f"Génère le rapport tactique complet pour : '{query}'"}
+                    ],
+                    temperature=0.2,
+                    response_format={"type": "json_object"}
+                )
+                report_text = response.choices[0].message.content
+                report = TacticalReportSchema.model_validate_json(report_text)
+                return AnalysisResponse(report=report, sources=sources)
+            except Exception as e2:
+                print(f"[ERROR] Erreur critique OpenRouter (payant) lors de l'analyse : {e2}")
+                if not use_gemini and not use_openai:
+                    raise e2
+
+    if use_gemini and not use_openrouter:
         try:
             from google import genai
             from google.genai import types
@@ -157,7 +214,7 @@ async def analyze_match(request: AnalysisRequest):
             print(f"[ERROR] Erreur critique Gemini lors de l'analyse : {e}")
             raise e
 
-    if use_openai and not use_gemini: # ou si gemini a échoué
+    if use_openai and not use_gemini and not use_openrouter:
         try:
             client = OpenAI(api_key=openai_key)
             
