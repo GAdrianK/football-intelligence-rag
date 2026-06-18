@@ -22,19 +22,13 @@ def import_season(dataset_name: str, match_id: str, db_path: Path):
     print(f"📖 Lecture du fichier : {csv_path.name}")
     df = pd.read_csv(csv_path, encoding='utf-8')
 
-    team_col = [col for col in df.columns if col.lower() in ['squad', 'team']]
-    if not team_col:
-        print(f"❌ Impossible de trouver la colonne d'équipe. Colonnes dispos : {list(df.columns)}")
-        return
-    
-    squad_column = team_col[0]
-    df_psg = df[df[squad_column].str.contains("Paris", case=False, na=False)].copy()
+    df_psg = df.copy()
     
     if df_psg.empty:
-        print(f"⚠️ Aucun joueur trouvé pour le PSG avec le mot-clé 'Paris' dans la colonne {squad_column}.")
+        print("⚠️ Aucun joueur trouvé dans le dataset.")
         return
     
-    print(f"⚽ {len(df_psg)} joueurs du PSG identifiés.")
+    print(f"⚽ {len(df_psg)} joueurs identifiés dans le dataset.")
 
     conn = sqlite3.connect(str(db_path))
     cursor = conn.cursor()
