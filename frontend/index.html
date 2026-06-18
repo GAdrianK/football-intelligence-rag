@@ -13,37 +13,40 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
+    <div class="app-container">
+        <!-- En-tête minimaliste -->
         <header>
-            <h1 class="logo">Football IQ <span class="dot">.</span></h1>
+            <h1>Football IQ <span>.</span></h1>
         </header>
 
+        <!-- Zone de saisie principale -->
         <main>
-            <div class="input-card">
-                <textarea id="prompt-input" placeholder="Saisissez une question tactique collective ou demandez un rapport sur un joueur (ex: Analyse Ousmane Dembélé et Bradley Barcola)..." rows="4"></textarea>
-                
-                <div class="controls-row">
-                    <div class="select-wrapper">
-                        <select id="season-select">
-                            <option value="season_2025_2026_summary">Saison 2025-2026</option>
-                            <option value="season_2024_2025_summary">Saison 2024-2025</option>
-                        </select>
-                    </div>
-                    <button id="analyze-btn" class="solid-btn">Analyser</button>
-                </div>
+            <textarea
+                id="prompt-input"
+                placeholder="Demande une analyse tactique ou un profil de scouting européen (ex: Compare Barcola entre 24/25 et 25/26)..."
+            ></textarea>
+
+            <!-- Contrôles discrets sous la boîte -->
+            <div class="controls-row">
+                <select id="season-select">
+                    <option value="season_2025_2026_summary">Saison 2025 - 2026</option>
+                    <option value="season_2024_2025_summary">Saison 2024 - 2025</option>
+                </select>
+
+                <button id="analyze-btn">Analyser</button>
             </div>
 
-            <div id="loading" class="loading-container hidden">
-                <span class="spinner"></span>
-                <span>Analyse tactique par Qwen 2.5...</span>
-            </div>
+            <!-- Gestion des erreurs réseau -->
+            <div id="error-box" class="error-box hidden"></div>
 
-            <div id="results-container" class="results-container hidden">
-                <div class="results-meta">
-                    <span id="season-badge" class="badge">Saison 2025-2026</span>
-                    <span id="players-badge" class="badge">0 Joueur(s) identifié(s)</span>
+            <!-- ================================================================= -->
+            <!-- LA ZONE DE RÉPONSE SECRÈTE (RÉINSTALLÉE ET BLINDÉE)              -->
+            <!-- ================================================================= -->
+            <div id="response-box" class="response-box hidden">
+                <div id="response-loading" class="response-loading hidden">
+                    🧠 Le moteur Qwen consulte la base SQL européenne... Génération du rapport tactique en cours...
                 </div>
-                <div id="analysis-output" class="analysis-output markdown-body"></div>
+                <div id="response-content" class="response-content markdown-body hidden"></div>
             </div>
         </main>
     </div>

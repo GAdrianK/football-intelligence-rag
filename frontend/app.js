@@ -1,16 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Dynamic base URL detection
     const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol.startsWith('file')
         ? 'http://127.0.0.1:8000'
-        : 'https://football-iq-backend.onrender.com'; // Fallback API URL
+        : 'https://football-iq-backend.onrender.com';
 
     const promptInput = document.getElementById('prompt-input');
     const seasonSelect = document.getElementById('season-select');
     const analyzeBtn = document.getElementById('analyze-btn');
-    const loadingContainer = document.getElementById('loading');
-    const resultsContainer = document.getElementById('results-container');
-    const seasonBadge = document.getElementById('season-badge');
-    const playersBadge = document.getElementById('players-badge');
-    const analysisOutput = document.getElementById('analysis-output');
+    const errorBox = document.getElementById('error-box');
+    const responseBox = document.getElementById('response-box');
+    const responseLoading = document.getElementById('response-loading');
+    const responseContent = document.getElementById('response-content');
 
     analyzeBtn.addEventListener('click', async () => {
         const prompt = promptInput.value.trim();
@@ -18,48 +18,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const season = seasonSelect.value;
 
-        // UI state: Loading
+        // UI State: Loading (conforming to the React template's CSS styles)
         analyzeBtn.disabled = true;
-        loadingContainer.classList.remove('hidden');
-        resultsContainer.classList.add('hidden');
+        analyzeBtn.textContent = 'Analyse...';
+        analyzeBtn.style.backgroundColor = '#27272a';
+        analyzeBtn.style.color = '#a1a1aa';
+        analyzeBtn.style.cursor = 'not-allowed';
+
+        // Reset error
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+        
+        // Setup response area visibility
+        responseContent.classList.add('hidden');
+        responseContent.innerHTML = '';
+        
+        responseLoading.classList.remove('hidden');
+        responseBox.classList.remove('hidden');
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/analyze`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, season })
             });
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Erreur de communication avec le serveur backend');
+                throw new Error(`Erreur serveur: ${response.status}`);
             }
 
             const data = await response.json();
-
-            // Meta update
-            seasonBadge.textContent = season === 'season_2025_2026_summary' ? 'Saison 2025-2026' : 'Saison 2024-2025';
-            
-            const playersCount = data.players_found ? data.players_found.length : 0;
-            playersBadge.textContent = `${playersCount} Joueur(s) détecté(s)`;
-
-            // Render Markdown
-            if (window.marked) {
-                analysisOutput.innerHTML = marked.parse(data.analysis || '');
+            if (data.status === 'success') {
+                // Parse markdown content inside the response container if marked is available, otherwise default to innerHTML/text
+                if (window.marked) {
+                    responseContent.innerHTML = marked.parse(data.analysis || '');
+                } else {
+                    responseContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${data.analysis || ''}</pre>`;
+                }
+                responseContent.classList.remove('hidden');
             } else {
-                analysisOutput.textContent = data.analysis || '';
+                throw new Error(data.detail || "Une erreur est survenue");
             }
-
-            // UI state: Show Results
-            resultsContainer.classList.remove('hidden');
-        } catch (error) {
-            console.error('Error during analysis request:', error);
-            alert(`Erreur : ${error.message}`);
+        } catch (err) {
+            errorBox.textContent = `⚠️ ${err.message || "Impossible de contacter le serveur tactique."}`;
+            errorBox.classList.remove('hidden');
+            responseBox.classList.add('hidden');
         } finally {
+            // Restore button states
             analyzeBtn.disabled = false;
-            loadingContainer.classList.add('hidden');
+            analyzeBtn.textContent = 'Analyser';
+            analyzeBtn.style.backgroundColor = '#fafafa';
+            analyzeBtn.style.color = '#09090b';
+            analyzeBtn.style.cursor = 'pointer';
+            responseLoading.classList.add('hidden');
         }
     });
 
