@@ -68,6 +68,32 @@ def fetch_player_stats_from_db(player_query: str, season: str):
         print(f"⚠️ SQLITE WARNING: {str(db_err)}")
         return []
 
+def fetch_top_players_from_db(season: str):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT player_name, 
+                   minutes_played AS minutes, 
+                   expected_goals AS xg, 
+                   expected_assists AS xa, 
+                   goals, 
+                   key_passes, 
+                   progressive_dribbles AS dribbles_prog, 
+                   defensive_pressures AS pressions_def 
+            FROM player_match_stats 
+            WHERE match_id = ? 
+            ORDER BY (goals + key_passes) DESC 
+            LIMIT 15
+        """, (season,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as db_err:
+        print(f"⚠️ SQLITE FALLBACK WARNING: {str(db_err)}")
+        return []
+
 @app.post("/api/analyze")
 async def analyze_tactical_trends(request: AnalysisRequest):
     try:
@@ -91,6 +117,18 @@ async def analyze_tactical_trends(request: AnalysisRequest):
         else:
             sql_context = []
 
+        # Détection des questions globales ou absence de résultats spécifiques
+        prompt_lower = request.prompt.lower()
+        global_keywords = {'mvp', 'meilleur', 'top', 'classement', 'buteur'}
+        has_global_keyword = any(keyword in prompt_lower for keyword in global_keywords)
+
+        is_fallback = False
+        if not sql_context or has_global_keyword:
+            fallback_stats = fetch_top_players_from_db(request.season)
+            if fallback_stats:
+                sql_context = fallback_stats
+                is_fallback = True
+
         system_instruction = (
             "Tu es l'ingénieur tactique en chef d'un club de football d'élite mondiale.\n"
             "Tu dois baser tes rapports exclusivement sur les statistiques réelles fournies.\n"
@@ -100,7 +138,10 @@ async def analyze_tactical_trends(request: AnalysisRequest):
         
         user_message = f"Requête tactique de l'utilisateur : {request.prompt}\n\n"
         if sql_context:
-            user_message += "📈 DONNÉES RÉELLES EXTRAITES DE LA BASE SQL :\n"
+            if is_fallback:
+                user_message += "📈 DONNÉES RÉELLES DU TOP 15 DES JOUEURS (Classés par Buts + Passes Clés) :\n"
+            else:
+                user_message += "📈 DONNÉES RÉELLES EXTRAITES DE LA BASE SQL :\n"
             for p in sql_context:
                 user_message += (
                     f"- {p['player_name']} ({request.season}) : {p['minutes']} min, {p['goals']} buts, "
