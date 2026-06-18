@@ -111,7 +111,7 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             user_message += "⚠️ Remarque : Aucune donnée statistique spécifique trouvée en base pour cette sélection. Utilise tes connaissances générales sur le Big 5.\n"
 
         response = ai_client.chat.completions.create(
-            model="qwen/qwen-2.5-72b-instruct:free",
+            model="openrouter/free",
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_message}
