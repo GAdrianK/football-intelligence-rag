@@ -4,29 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Football IQ .</title>
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Clean, lightweight markdown parsing via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
-        <!-- En-tête minimaliste -->
-        <header>
-            <h1>Football IQ <span>.</span></h1>
+        <!-- Header Apple Style -->
+        <header class="apple-header">
+            <div>
+                <h1 class="logo">Football IQ</h1>
+                <p class="subtitle">Moteur de Scouting & d'Analyse d'Élite</p>
+            </div>
+            <div class="status-indicator"></div>
         </header>
 
-        <!-- Zone de saisie principale -->
-        <main>
+        <!-- Le Panneau de Verre (Glass Card) -->
+        <div class="glass-card">
             <textarea
                 id="prompt-input"
-                placeholder="Demande une analyse tactique ou un profil de scouting européen (ex: Compare Barcola entre 24/25 et 25/26)..."
+                placeholder="Posez votre question tactique au moteur européen..."
             ></textarea>
 
-            <!-- Contrôles discrets sous la boîte -->
+            <!-- Actions - Boutons style verre Apple -->
             <div class="controls-row">
                 <select id="season-select">
                     <option value="season_2025_2026_summary">Saison 2025 - 2026</option>
@@ -35,20 +35,19 @@
 
                 <button id="analyze-btn">Analyser</button>
             </div>
+        </div>
 
-            <!-- Gestion des erreurs réseau -->
-            <div id="error-box" class="error-box hidden"></div>
+        <!-- Zone d'erreur -->
+        <div id="error-box" class="error-box hidden"></div>
 
-            <!-- ================================================================= -->
-            <!-- LA ZONE DE RÉPONSE SECRÈTE (RÉINSTALLÉE ET BLINDÉE)              -->
-            <!-- ================================================================= -->
-            <div id="response-box" class="response-box hidden">
-                <div id="response-loading" class="response-loading hidden">
-                    🧠 Le moteur Qwen consulte la base SQL européenne... Génération du rapport tactique en cours...
-                </div>
-                <div id="response-content" class="response-content markdown-body hidden"></div>
+        <!-- Zone de Résultat - Feuille de verre dépolie -->
+        <div id="response-box" class="response-box hidden">
+            <div id="response-loading" class="response-loading hidden">
+                <div class="spinner"></div>
+                <span>Calcul des métriques et modélisation tactique par Qwen...</span>
             </div>
-        </main>
+            <div id="response-content" class="response-content markdown-body hidden"></div>
+        </div>
     </div>
 
     <script src="app.js"></script>
