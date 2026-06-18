@@ -27,6 +27,11 @@ app.add_middleware(
 )
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY or "mock-key" in OPENROUTER_API_KEY:
+    print("⚠️ WARNING: OPENROUTER_API_KEY is not configured or is a mock key! Calls to Qwen LLM will fail with 401.")
+else:
+    print("🚀 OPENROUTER_API_KEY correctly loaded.")
+
 ai_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY
@@ -39,31 +44,40 @@ class AnalysisRequest(BaseModel):
     season: Optional[str] = "season_2025_2026_summary"
 
 def fetch_player_stats_from_db(player_query: str, season: str):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT player_name, 
-               minutes_played AS minutes, 
-               goals, 
-               expected_goals AS xg, 
-               expected_assists AS xa, 
-               key_passes, 
-               progressive_dribbles AS dribbles_prog, 
-               defensive_pressures AS pressions_def 
-        FROM player_match_stats 
-        WHERE match_id = ? AND player_name LIKE ?
-        LIMIT 5
-    """, (season, f"%{player_query}%"))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT player_name, 
+                   minutes_played AS minutes, 
+                   goals, 
+                   expected_goals AS xg, 
+                   expected_assists AS xa, 
+                   key_passes, 
+                   progressive_dribbles AS dribbles_prog, 
+                   defensive_pressures AS pressions_def 
+            FROM player_match_stats 
+            WHERE match_id = ? AND player_name LIKE ?
+            LIMIT 5
+        """, (season, f"%{player_query}%"))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as db_err:
+        print(f"⚠️ SQLITE WARNING: {str(db_err)}")
+        return []
 
 @app.post("/api/analyze")
 async def analyze_tactical_trends(request: AnalysisRequest):
     try:
-        words = request.prompt.split()
-        potential_players = [w for w in words if len(w) > 3 and w[0].isupper() or w.lower() in request.prompt.lower()]
+        # Nettoyage et filtrage propre des mots pour éviter d'interroger la base pour des mots-clés courants
+        words = request.prompt.replace("?", "").replace(".", "").replace(",", "").replace("!", "").split()
+        stop_words = {"qui", "est", "le", "la", "les", "des", "pour", "dans", "avec", "mais", "plus", "moins", "comme", "sont", "quel", "quelle", "quelles", "quels"}
+        potential_players = [
+            w for w in words 
+            if len(w) >= 3 and (w[0].isupper() or (w.lower() not in stop_words and len(w) > 3))
+        ]
         
         sql_context = []
         for word in potential_players:
@@ -71,7 +85,11 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             if stats:
                 sql_context.extend(stats)
         
-        sql_context = {v['player_name']: v for v in sql_context}.values()
+        # Déduplication par nom de joueur
+        if sql_context:
+            sql_context = list({v['player_name']: v for v in sql_context}.values())
+        else:
+            sql_context = []
 
         system_instruction = (
             "Tu es l'ingénieur tactique en chef d'un club de football d'élite mondiale.\n"
@@ -109,6 +127,7 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             "analysis": response.choices[0].message.content
         }
     except Exception as e:
+        print(f"💥 ERREUR CRITIQUE BACKEND : {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")
