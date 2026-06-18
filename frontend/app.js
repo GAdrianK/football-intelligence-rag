@@ -44,7 +44,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Erreur serveur: ${response.status}`);
+                let errMsg = `Erreur serveur: ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.detail) {
+                        errMsg = errData.detail;
+                    }
+                } catch (_) {}
+                throw new Error(errMsg);
             }
 
             const data = await response.json();
