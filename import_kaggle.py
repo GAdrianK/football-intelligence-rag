@@ -71,6 +71,7 @@ def import_season(dataset_name: str, match_id: str, db_path: Path):
     for _, row in df_psg.iterrows():
         player_name = row.get('Player', 'Inconnu')
         goals = int(row.get('Gls', 0))
+        team_name = row.get('Squad', 'Inconnu')
         
         xg = float(row.get(xg_col, 0)) if xg_col and pd.notna(row.get(xg_col)) else 0.0
         xa = float(row.get(xa_col, 0)) if xa_col and pd.notna(row.get(xa_col)) else 0.0
@@ -83,16 +84,16 @@ def import_season(dataset_name: str, match_id: str, db_path: Path):
         try:
             cursor.execute("""
                 INSERT INTO player_match_stats 
-                (match_id, player_name, minutes_played, goals, expected_goals, expected_assists, key_passes, progressive_dribbles, defensive_pressures, competition)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (match_id, player_name, minutes, goals, xg, xa, key_passes, dribbles, pressions, 'Domestic League'))
+                (match_id, player_name, minutes_played, goals, expected_goals, expected_assists, key_passes, progressive_dribbles, defensive_pressures, competition, team_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (match_id, player_name, minutes, goals, xg, xa, key_passes, dribbles, pressions, 'Domestic League', team_name))
             rows_inserted += 1
         except Exception as e:
             cursor.execute("""
                 UPDATE player_match_stats 
-                SET minutes_played=?, goals=?, expected_goals=?, expected_assists=?, key_passes=?, progressive_dribbles=?, defensive_pressures=?, competition=?
+                SET minutes_played=?, goals=?, expected_goals=?, expected_assists=?, key_passes=?, progressive_dribbles=?, defensive_pressures=?, competition=?, team_name=?
                 WHERE match_id=? AND player_name=?
-            """, (minutes, goals, xg, xa, key_passes, dribbles, pressions, 'Domestic League', match_id, player_name))
+            """, (minutes, goals, xg, xa, key_passes, dribbles, pressions, 'Domestic League', team_name, match_id, player_name))
             rows_inserted += 1
 
     conn.commit()
@@ -106,6 +107,7 @@ def import_season(dataset_name: str, match_id: str, db_path: Path):
     for _, row in df_psg.iterrows():
         player_name = row.get('Player', 'Inconnu')
         goals = int(row.get('Gls', 0))
+        team_name = row.get('Squad', 'Inconnu')
         
         xg = float(row.get(xg_col, 0)) if xg_col and pd.notna(row.get(xg_col)) else 0.0
         xa = float(row.get(xa_col, 0)) if xa_col and pd.notna(row.get(xa_col)) else 0.0
@@ -126,16 +128,16 @@ def import_season(dataset_name: str, match_id: str, db_path: Path):
             try:
                 cursor.execute("""
                     INSERT INTO player_match_stats 
-                    (match_id, player_name, minutes_played, goals, expected_goals, expected_assists, key_passes, progressive_dribbles, defensive_pressures, competition)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (cl_match_id, player_name, cl_min, cl_gls, cl_xg_val, cl_xa_val, cl_kp_val, cl_drib, cl_press, 'Champions League'))
+                    (match_id, player_name, minutes_played, goals, expected_goals, expected_assists, key_passes, progressive_dribbles, defensive_pressures, competition, team_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (cl_match_id, player_name, cl_min, cl_gls, cl_xg_val, cl_xa_val, cl_kp_val, cl_drib, cl_press, 'Champions League', team_name))
                 cl_rows_inserted += 1
             except Exception as e:
                 cursor.execute("""
                     UPDATE player_match_stats 
-                    SET minutes_played=?, goals=?, expected_goals=?, expected_assists=?, key_passes=?, progressive_dribbles=?, defensive_pressures=?, competition=?
+                    SET minutes_played=?, goals=?, expected_goals=?, expected_assists=?, key_passes=?, progressive_dribbles=?, defensive_pressures=?, competition=?, team_name=?
                     WHERE match_id=? AND player_name=?
-                """, (cl_min, cl_gls, cl_xg_val, cl_xa_val, cl_kp_val, cl_drib, cl_press, 'Champions League', cl_match_id, player_name))
+                """, (cl_min, cl_gls, cl_xg_val, cl_xa_val, cl_kp_val, cl_drib, cl_press, 'Champions League', team_name, cl_match_id, player_name))
                 cl_rows_inserted += 1
 
     conn.commit()
