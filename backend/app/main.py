@@ -44,24 +44,44 @@ class AnalysisRequest(BaseModel):
     prompt: str
     season: Optional[str] = "season_2025_2026_summary"
 
-def fetch_player_stats_from_db(player_query: str, season: str):
+def fetch_player_stats_from_db(player_query: str, season: str, use_ldc: bool = False):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT player_name, 
-                   minutes_played AS minutes, 
-                   goals, 
-                   expected_goals AS xg, 
-                   expected_assists AS xa, 
-                   key_passes, 
-                   progressive_dribbles AS dribbles_prog, 
-                   defensive_pressures AS pressions_def 
-            FROM player_match_stats 
-            WHERE match_id = ? AND player_name LIKE ?
-            LIMIT 5
-        """, (season, f"%{player_query}%"))
+        
+        season_prefix = season.replace("_summary", "") + "_%"
+        
+        if use_ldc:
+            cursor.execute("""
+                SELECT player_name, 
+                       minutes_played AS minutes, 
+                       goals, 
+                       expected_goals AS xg, 
+                       expected_assists AS xa, 
+                       key_passes, 
+                       progressive_dribbles AS dribbles_prog, 
+                       defensive_pressures AS pressions_def 
+                FROM player_match_stats 
+                WHERE player_name LIKE ? AND match_id LIKE ? AND competition = 'Champions League'
+                LIMIT 5
+            """, (f"%{player_query}%", season_prefix))
+        else:
+            cursor.execute("""
+                SELECT player_name, 
+                       SUM(minutes_played) AS minutes, 
+                       SUM(goals) AS goals, 
+                       ROUND(SUM(expected_goals), 1) AS xg, 
+                       ROUND(SUM(expected_assists), 1) AS xa, 
+                       SUM(key_passes) AS key_passes, 
+                       SUM(progressive_dribbles) AS dribbles_prog, 
+                       SUM(defensive_pressures) AS pressions_def 
+                FROM player_match_stats 
+                WHERE player_name LIKE ? AND match_id LIKE ?
+                GROUP BY player_name
+                LIMIT 5
+            """, (f"%{player_query}%", season_prefix))
+            
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -69,25 +89,46 @@ def fetch_player_stats_from_db(player_query: str, season: str):
         print(f"⚠️ SQLITE WARNING: {str(db_err)}")
         return []
 
-def fetch_top_players_from_db(season: str):
+def fetch_top_players_from_db(season: str, use_ldc: bool = False):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT player_name, 
-                   minutes_played AS minutes, 
-                   expected_goals AS xg, 
-                   expected_assists AS xa, 
-                   goals, 
-                   key_passes, 
-                   progressive_dribbles AS dribbles_prog, 
-                   defensive_pressures AS pressions_def 
-            FROM player_match_stats 
-            WHERE match_id = ? 
-            ORDER BY (goals + key_passes) DESC 
-            LIMIT 15
-        """, (season,))
+        
+        season_prefix = season.replace("_summary", "") + "_%"
+        
+        if use_ldc:
+            cursor.execute("""
+                SELECT player_name, 
+                       minutes_played AS minutes, 
+                       expected_goals AS xg, 
+                       expected_assists AS xa, 
+                       goals, 
+                       key_passes, 
+                       progressive_dribbles AS dribbles_prog, 
+                       defensive_pressures AS pressions_def 
+                FROM player_match_stats 
+                WHERE match_id LIKE ? AND competition = 'Champions League'
+                ORDER BY (goals + key_passes) DESC 
+                LIMIT 15
+            """, (season_prefix,))
+        else:
+            cursor.execute("""
+                SELECT player_name, 
+                       SUM(minutes_played) AS minutes, 
+                       ROUND(SUM(expected_goals), 1) AS xg, 
+                       ROUND(SUM(expected_assists), 1) AS xa, 
+                       SUM(goals) AS goals, 
+                       SUM(key_passes) AS key_passes, 
+                       SUM(progressive_dribbles) AS dribbles_prog, 
+                       SUM(defensive_pressures) AS pressions_def 
+                FROM player_match_stats 
+                WHERE match_id LIKE ?
+                GROUP BY player_name
+                ORDER BY (SUM(goals) + SUM(key_passes)) DESC 
+                LIMIT 15
+            """, (season_prefix,))
+            
         rows = cursor.fetchall()
         conn.close()
         return [dict(row) for row in rows]
@@ -106,9 +147,12 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             if len(w) >= 3 and (w[0].isupper() or (w.lower() not in stop_words and len(w) > 3))
         ]
         
+        prompt_lower = request.prompt.lower()
+        use_ldc = 'ldc' in prompt_lower or 'ligue des champions' in prompt_lower
+        
         sql_context = []
         for word in potential_players:
-            stats = fetch_player_stats_from_db(word, request.season)
+            stats = fetch_player_stats_from_db(word, request.season, use_ldc)
             if stats:
                 sql_context.extend(stats)
         
@@ -119,13 +163,12 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             sql_context = []
 
         # Détection des questions globales ou absence de résultats spécifiques
-        prompt_lower = request.prompt.lower()
         global_keywords = {'mvp', 'meilleur', 'top', 'classement', 'buteur'}
         has_global_keyword = any(keyword in prompt_lower for keyword in global_keywords)
 
         is_fallback = False
         if not sql_context or has_global_keyword:
-            fallback_stats = fetch_top_players_from_db(request.season)
+            fallback_stats = fetch_top_players_from_db(request.season, use_ldc)
             if fallback_stats:
                 sql_context = fallback_stats
                 is_fallback = True
@@ -153,10 +196,11 @@ async def analyze_tactical_trends(request: AnalysisRequest):
         
         user_message = f"Requête tactique de l'utilisateur : {request.prompt}\n\n"
         if sql_context:
+            comp_type = "Champions League" if use_ldc else "Toutes Compétitions (Cumulé)"
             if is_fallback:
-                user_message += "📈 DONNÉES RÉELLES DU TOP 15 DES JOUEURS (Classés par Buts + Passes Clés) :\n"
+                user_message += f"📈 DONNÉES RÉELLES DU TOP 15 DES JOUEURS - {comp_type} (Classés par Buts + Passes Clés) :\n"
             else:
-                user_message += "📈 DONNÉES RÉELLES EXTRAITES DE LA BASE SQL :\n"
+                user_message += f"📈 DONNÉES RÉELLES EXTRAITES DE LA BASE SQL ({comp_type}) :\n"
             for p in sql_context:
                 user_message += (
                     f"- {p['player_name']} ({request.season}) : {p['minutes']} min, {p['goals']} buts, "
