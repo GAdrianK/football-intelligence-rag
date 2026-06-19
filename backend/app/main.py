@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -157,16 +158,19 @@ async def analyze_tactical_trends(request: AnalysisRequest):
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_message}
             ],
-            temperature=0.3
+            temperature=0.3,
+            stream=True
         )
         
-        return {
-            "status": "success",
-            "query": request.prompt,
-            "season_analyzed": request.season,
-            "players_found": [p['player_name'] for p in sql_context],
-            "analysis": response.choices[0].message.content
-        }
+        def generate_chunks():
+            try:
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            except Exception as e:
+                print(f"💥 ERREUR DE STREAMING : {str(e)}")
+
+        return StreamingResponse(generate_chunks(), media_type="text/plain")
     except Exception as e:
         print(f"💥 ERREUR CRITIQUE BACKEND : {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

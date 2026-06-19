@@ -54,17 +54,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errMsg);
             }
 
-            const data = await response.json();
-            if (data.status === 'success') {
-                // Parse markdown content inside the response container if marked is available, otherwise default to innerHTML/text
-                if (window.marked) {
-                    responseContent.innerHTML = marked.parse(data.analysis || '');
-                } else {
-                    responseContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${data.analysis || ''}</pre>`;
+            // Consommation du flux de réponse chunk par chunk
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            
+            responseContent.innerHTML = '';
+            responseContent.classList.remove('hidden');
+            
+            let fullText = '';
+            let isFirstChunk = true;
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                if (isFirstChunk) {
+                    responseLoading.classList.add('hidden');
+                    isFirstChunk = false;
                 }
-                responseContent.classList.remove('hidden');
-            } else {
-                throw new Error(data.detail || "Une erreur est survenue");
+
+                const chunk = decoder.decode(value, { stream: true });
+                fullText += chunk;
+
+                // Rendu progressif en HTML (Markdown)
+                if (window.marked) {
+                    responseContent.innerHTML = marked.parse(fullText);
+                } else {
+                    responseContent.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${fullText}</pre>`;
+                }
             }
         } catch (err) {
             errorBox.textContent = `⚠️ ${err.message || "Impossible de contacter le serveur tactique."}`;
