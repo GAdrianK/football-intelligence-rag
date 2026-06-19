@@ -148,12 +148,12 @@ async def analyze_tactical_trends(request: AnalysisRequest):
         use_fallback = False
         fallback_reason = ""
 
-        # Étape 1 : Génération SQL (appel rapide non-streamé)
         sql_generation_prompt = (
             "Tu es un traducteur de requêtes tactiques de football en requêtes SQL SQLite très précis.\n"
-            "Voici le schéma exact de la table 'player_match_stats' dans SQLite :\n"
+            "Voici le schéma exact des tables disponibles dans SQLite :\n\n"
+            "1. Table 'player_match_stats' (statistiques détaillées de match) :\n"
             "- player_name (VARCHAR) : Nom du joueur\n"
-            "- team_name (TEXT) : Nom du club/équipe du joueur (ex: 'Paris S-G', 'PSG', 'Marseille', 'Real Madrid', 'Barcelona', etc. Utilise LIKE '%Paris%' ou LIKE '%PSG%' pour filtrer sur le PSG)\n"
+            "- team_name (TEXT) : Nom du club/équipe du joueur (ex: 'Paris S-G', 'PSG', 'Marseille', 'Real Madrid', 'Barcelona', etc. Utilise LIKE '%Paris%' ou LIKE '%PSG%' pour le PSG)\n"
             "- match_id (VARCHAR) : Identifiant de la saison ou du match (ex: 'season_2024_2025_summary', 'season_2024_2025_cl')\n"
             "- minutes_played (INTEGER) : Temps de jeu en minutes\n"
             "- goals (INTEGER) : Buts marqués\n"
@@ -163,14 +163,29 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             "- progressive_dribbles (INTEGER) : Dribbles progressifs\n"
             "- defensive_pressures (INTEGER) : Pressions défensives\n"
             "- competition (TEXT) : 'Domestic League' ou 'Champions League'\n\n"
+            "2. Table 'player_profiles' (profils et valeurs marchandes) :\n"
+            "- player_id (INTEGER) : Identifiant unique du joueur\n"
+            "- player_name (TEXT) : Nom du joueur (pour faire la jointure JOIN player_profiles ON player_match_stats.player_name = player_profiles.player_name)\n"
+            "- position (TEXT) : Poste principal du joueur : 'F' (Forward/Attaquant), 'M' (Midfielder/Milieu), 'D' (Defender/Défenseur), 'G' (Goalkeeper/Gardien)\n"
+            "- market_value (REAL) : Valeur marchande en Euros (ex: 68000000.0 pour 68M€)\n"
+            "- rating (REAL) : Note moyenne du joueur sur 10 (ex: 7.21)\n"
+            "- league (TEXT) : Championnat domestique du joueur (ex: 'Ligue 1', 'Premier League', 'LaLiga', 'Serie A', 'Bundesliga', 'Eredivisie', 'Liga Portugal', 'Super Lig')\n\n"
             "Consignes de traduction :\n"
             "1. Renvoie UNIQUEMENT la requête SQL correspondante sous forme de bloc de code markdown : ```sql\n[REQUÊTE]\n```\n"
             "2. Ne mets aucun autre texte, explication ou blabla.\n"
             "3. Pour obtenir les statistiques cumulées d'un joueur, utilise des fonctions d'agrégation comme SUM(goals), SUM(minutes_played), SUM(expected_goals), etc., et regroupe par player_name avec GROUP BY player_name.\n"
             "4. Si la question mentionne 'LDC' ou 'Ligue des Champions', ajoute la condition `competition = 'Champions League'`. Si elle mentionne le championnat, ajoute `competition = 'Domestic League'`.\n"
             "5. Assure-sol de filtrer sur match_id en fonction de la saison sélectionnée si mentionné (par exemple match_id LIKE 'season_2024_2025_%' ou match_id LIKE 'season_2025_2026_%').\n"
-            "6. Utilise LIKE pour les recherches de noms de joueurs pour être tolérant aux fautes d'orthographe (ex: player_name LIKE '%Kane%').\n"
+            "6. Utilise LIKE pour les recherches de noms de joueurs pour être tolérant aux fautes d'orthographe (ex: player_match_stats.player_name LIKE '%Kane%').\n"
             "7. Si la question mentionne un club/équipe (par exemple le PSG), filtre également sur le nom du club avec team_name (ex: team_name LIKE '%Paris%' ou team_name LIKE '%PSG%').\n"
+            "8. Fais un JOIN avec player_profiles si la requête mentionne la valeur marchande, la note moyenne du joueur, son poste (F/M/D/G), ou si le filtrage par poste/valeur/championnat est requis.\n\n"
+            "Exemples de requêtes générées :\n"
+            "- Question: 'Quelle est la valeur marchande de Bradley Barcola ?'\n"
+            "  SQL: ```sql\nSELECT player_profiles.player_name, player_profiles.market_value, player_profiles.rating, player_profiles.position FROM player_profiles WHERE player_profiles.player_name LIKE '%Barcola%'\n```\n"
+            "- Question: 'Qui est le joueur le plus cher du PSG et quelles sont ses statistiques ?'\n"
+            "  SQL: ```sql\nSELECT pms.player_name, pms.team_name, pp.market_value, pp.rating, pp.position, SUM(pms.minutes_played) AS minutes_played, SUM(pms.goals) AS goals, SUM(pms.expected_goals) AS expected_goals, SUM(pms.expected_assists) AS expected_assists, SUM(pms.key_passes) AS key_passes, SUM(pms.progressive_dribbles) AS progressive_dribbles, SUM(pms.defensive_pressures) AS defensive_pressures FROM player_match_stats pms JOIN player_profiles pp ON pms.player_name = pp.player_name WHERE (pms.team_name LIKE '%PSG%' OR pms.team_name LIKE '%Paris%') AND pms.match_id LIKE 'season_2024_2025_%' GROUP BY pms.player_name, pms.team_name, pp.market_value, pp.rating, pp.position ORDER BY pp.market_value DESC LIMIT 1\n```\n"
+            "- Question: 'Donne-moi les milieux de terrain de Ligue 1 avec une note supérieure à 7.0 par ordre de valeur marchande décroissante.'\n"
+            "  SQL: ```sql\nSELECT player_name, league, position, market_value, rating FROM player_profiles WHERE league = 'Ligue 1' AND position = 'M' AND rating > 7.0 ORDER BY market_value DESC\n```\n"
         )
 
         user_msg_stage1 = (
@@ -221,26 +236,32 @@ async def analyze_tactical_trends(request: AnalysisRequest):
                         mapped_row = {}
                         for k, v in row_dict.items():
                             k_lower = k.lower()
-                            if 'player_name' in k_lower or k_lower == 'player':
+                            if 'player_name' in k_lower or k_lower == 'player' or k_lower == 'nom' or k_lower == 'joueur':
                                 mapped_row['player_name'] = v
-                            elif 'minutes_played' in k_lower or k_lower == 'minutes':
+                            elif 'min' in k_lower:
                                 mapped_row['minutes'] = v
-                            elif 'expected_goals' in k_lower or k_lower == 'xg':
+                            elif 'xg' in k_lower or 'expected_goals' in k_lower:
                                 mapped_row['xg'] = v
-                            elif 'expected_assists' in k_lower or k_lower == 'xa':
+                            elif 'xa' in k_lower or 'expected_assists' in k_lower:
                                 mapped_row['xa'] = v
-                            elif 'progressive_dribbles' in k_lower or 'dribbles_prog' in k_lower:
+                            elif 'dribble' in k_lower or 'carry' in k_lower or 'dribb' in k_lower:
                                 mapped_row['dribbles_prog'] = v
-                            elif 'defensive_pressures' in k_lower or 'pressions_def' in k_lower or 'pressions' in k_lower:
+                            elif 'press' in k_lower:
                                 mapped_row['pressions_def'] = v
-                            elif 'goals' in k_lower:
+                            elif 'goal' in k_lower or k_lower == 'gls' or k_lower == 'but' or k_lower == 'buts':
                                 mapped_row['goals'] = v
-                            elif 'key_passes' in k_lower:
+                            elif 'key' in k_lower or 'kp' in k_lower or 'pass' in k_lower:
                                 mapped_row['key_passes'] = v
                             elif 'competition' in k_lower:
                                 mapped_row['competition'] = v
-                            elif 'team_name' in k_lower or k_lower == 'team' or k_lower == 'squad' or k_lower == 'club':
+                            elif 'team_name' in k_lower or k_lower == 'team' or k_lower == 'squad' or k_lower == 'club' or 'equipe' in k_lower:
                                 mapped_row['team_name'] = v
+                            elif 'value' in k_lower or 'valeur' in k_lower or 'price' in k_lower or 'tarif' in k_lower:
+                                mapped_row['market_value'] = v
+                            elif 'rating' in k_lower or 'note' in k_lower:
+                                mapped_row['rating'] = v
+                            elif 'position' in k_lower or 'poste' in k_lower or k_lower == 'pos':
+                                mapped_row['position'] = v
                             else:
                                 mapped_row[k] = v
 
@@ -330,8 +351,17 @@ async def analyze_tactical_trends(request: AnalysisRequest):
             user_message += "📈 DONNÉES RÉELLES EXTRAITES DE LA BASE SQL :\n"
             for p in sql_rows:
                 team_info = f" (Club: {p['team_name']})" if p.get('team_name') else ""
+                profile_info = ""
+                if p.get('market_value'):
+                    profile_info += f", Valeur: {p['market_value']/1000000:.1f} M€"
+                if p.get('rating'):
+                    profile_info += f", Note: {p['rating']:.2f}/10"
+                if p.get('position'):
+                    pos_map = {'F': 'Attaquant', 'M': 'Milieu', 'D': 'Défenseur', 'G': 'Gardien'}
+                    profile_info += f", Poste: {pos_map.get(p['position'], p['position'])}"
+                
                 user_message += (
-                    f"- {p['player_name']}{team_info} : {p['minutes']} min, {p['goals']} buts, "
+                    f"- {p['player_name']}{team_info}{profile_info} : {p['minutes']} min, {p['goals']} buts, "
                     f"{p['xg']} xG, {p['xa']} xA, {p['key_passes']} passes clés, "
                     f"{p['dribbles_prog']} dribbles progressifs, {p['pressions_def']} pressions.\n"
                 )
