@@ -27,6 +27,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.api.chat import router as chat_router
+from app.api.pdf import router as pdf_router
+
+app.include_router(chat_router)
+app.include_router(pdf_router)
+
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY or "mock-key" in OPENROUTER_API_KEY:
     print("⚠️ WARNING: OPENROUTER_API_KEY is not configured or is a mock key! Calls to Qwen LLM will fail with 401.")
@@ -627,4 +633,10 @@ async def analyze_tactical_trends(request: AnalysisRequest):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "online", "engine": "Qwen-2.5-72B-via-OpenRouter", "database": "Connected"}
+    return {
+        "status": "healthy",
+        "project": "Football IQ Assistant",
+        "version": "1.0.0",
+        "engine": "Qwen-2.5-72B-via-OpenRouter",
+        "database": "Connected"
+    }
