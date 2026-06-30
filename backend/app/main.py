@@ -143,6 +143,239 @@ def fetch_top_players_from_db(season: str, use_ldc: bool = False):
 @app.post("/api/analyze")
 async def analyze_tactical_trends(request: AnalysisRequest):
     try:
+        # Détection du mode Recherche de Similarité (Algorithme ADN)
+        prompt_lower = request.prompt.lower()
+        sim_keywords = ["clone", "similaire", "ressemble", "profil identique", "sosie", "copie", "semblable"]
+        is_similarity_search = any(k in prompt_lower for k in sim_keywords)
+
+        if is_similarity_search:
+            print(f"🧬 Similarity search mode activated for query: '{request.prompt}'")
+            # Extraction déterministe du nom du joueur cible depuis le prompt
+            words = request.prompt.replace("?", "").replace(".", "").replace(",", "").replace("!", "").split()
+            stop_words = {"qui", "est", "le", "la", "les", "des", "pour", "dans", "avec", "mais", "plus", "moins", "comme", "sont", "quel", "quelle", "quelles", "quels", "trouve", "trouve-moi", "un", "joueur", "similaire", "clone", "ressemble", "profil", "identique", "sosie", "copie", "semblable", "de", "à", "se", "sa", "ses", "son"}
+            candidate_words = [w for w in words if w.lower() not in stop_words and len(w) >= 3]
+            
+            canonical_target_name = None
+            if candidate_words:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                
+                # Étape 1 : Essayer de trouver un joueur qui correspond à TOUS les mots candidats
+                query_parts = []
+                params = []
+                for w in candidate_words:
+                    query_parts.append("player_name LIKE ?")
+                    params.append(f"%{w}%")
+                
+                cursor.execute(
+                    f"SELECT DISTINCT player_name FROM player_match_stats WHERE {' AND '.join(query_parts)} LIMIT 1",
+                    params
+                )
+                row = cursor.fetchone()
+                if row:
+                    canonical_target_name = row[0]
+                else:
+                    # Étape 2 : Sinon, essayer les mots un par un par ordre de longueur décroissante
+                    for word in sorted(candidate_words, key=len, reverse=True):
+                        cursor.execute(
+                            "SELECT DISTINCT player_name FROM player_match_stats WHERE player_name LIKE ? LIMIT 1",
+                            (f"%{word}%",)
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            canonical_target_name = row[0]
+                            break
+                conn.close()
+            print(f"🧬 Extracted canonical target player name: '{canonical_target_name}'")
+            target_profile = None
+            top_clones = []
+
+            if canonical_target_name:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                # Récupérer les stats cumulées de TOUS les joueurs pour la saison choisie
+                season_pattern = f"{request.season}%"
+                cursor.execute("""
+                    SELECT 
+                        pms.player_name,
+                        pms.team_name,
+                        pp.position,
+                        pp.market_value,
+                        pp.rating,
+                        SUM(pms.minutes_played) AS total_minutes,
+                        SUM(pms.goals) AS total_goals,
+                        SUM(pms.expected_goals) AS total_xg,
+                        SUM(pms.expected_assists) AS total_xa,
+                        SUM(pms.key_passes) AS total_kp,
+                        SUM(pms.progressive_dribbles) AS total_dribbles,
+                        SUM(pms.defensive_pressures) AS total_pressures
+                    FROM player_match_stats pms
+                    LEFT JOIN player_profiles pp ON pms.player_name = pp.player_name
+                    WHERE pms.match_id LIKE ?
+                    GROUP BY pms.player_name, pms.team_name, pp.position, pp.market_value, pp.rating
+                """, (season_pattern,))
+                
+                columns = [d[0] for d in cursor.description]
+                all_players = [dict(zip(columns, r)) for r in cursor.fetchall()]
+                conn.close()
+                
+                # Trouver le profil de la cible
+                target_profile = next((p for p in all_players if p['player_name'] == canonical_target_name), None)
+                if not target_profile:
+                    # Recherche globale si absent de la saison courante
+                    conn = sqlite3.connect(DB_PATH)
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT 
+                            pms.player_name,
+                            pms.team_name,
+                            pp.position,
+                            pp.market_value,
+                            pp.rating,
+                            SUM(pms.minutes_played) AS total_minutes,
+                            SUM(pms.goals) AS total_goals,
+                            SUM(pms.expected_goals) AS total_xg,
+                            SUM(pms.expected_assists) AS total_xa,
+                            SUM(pms.key_passes) AS total_kp,
+                            SUM(pms.progressive_dribbles) AS total_dribbles,
+                            SUM(pms.defensive_pressures) AS total_pressures
+                        FROM player_match_stats pms
+                        LEFT JOIN player_profiles pp ON pms.player_name = pp.player_name
+                        WHERE pms.player_name = ?
+                        GROUP BY pms.player_name, pms.team_name, pp.position, pp.market_value, pp.rating
+                    """, (canonical_target_name,))
+                    row = cursor.fetchone()
+                    conn.close()
+                    if row:
+                        target_profile = dict(row)
+                
+                if target_profile and target_profile.get('total_minutes', 0) > 0:
+                    t_min = target_profile['total_minutes']
+                    target_vec = [
+                        (target_profile['total_goals'] or 0) / t_min * 90.0,
+                        (target_profile['total_xg'] or 0.0) / t_min * 90.0,
+                        (target_profile['total_xa'] or 0.0) / t_min * 90.0,
+                        (target_profile['total_kp'] or 0) / t_min * 90.0,
+                        (target_profile['total_dribbles'] or 0) / t_min * 90.0,
+                        (target_profile['total_pressures'] or 0) / t_min * 90.0
+                    ]
+                    
+                    import math
+                    clones = []
+                    for p in all_players:
+                        if p['player_name'] == canonical_target_name:
+                            continue
+                        if (p['total_minutes'] or 0) < 400:
+                            continue
+                        
+                        p_min = p['total_minutes']
+                        p_vec = [
+                            (p['total_goals'] or 0) / p_min * 90.0,
+                            (p['total_xg'] or 0.0) / p_min * 90.0,
+                            (p['total_xa'] or 0.0) / p_min * 90.0,
+                            (p['total_kp'] or 0) / p_min * 90.0,
+                            (p['total_dribbles'] or 0) / p_min * 90.0,
+                            (p['total_pressures'] or 0) / p_min * 90.0
+                        ]
+                        
+                        dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(target_vec, p_vec)))
+                        similarity = 1.0 / (1.0 + dist) * 100.0
+                        
+                        clones.append({
+                            'player_name': p['player_name'],
+                            'team_name': p['team_name'],
+                            'position': p['position'],
+                            'market_value': p['market_value'],
+                            'rating': p['rating'],
+                            'minutes': p['total_minutes'],
+                            'goals': p['total_goals'],
+                            'xg': p['total_xg'],
+                            'xa': p['total_xa'],
+                            'key_passes': p['total_kp'],
+                            'dribbles_prog': p['total_dribbles'],
+                            'pressions_def': p['total_pressures'],
+                            'vec_90': p_vec,
+                            'similarity': similarity
+                        })
+                    
+                    clones.sort(key=lambda x: x['similarity'], reverse=True)
+                    top_clones = clones[:5]
+
+            # Construction des prompts pour Qwen (Similarité)
+            if canonical_target_name and target_profile and top_clones:
+                system_instruction = (
+                    "Tu es l'ingénieur tactique en chef et recruteur principal d'un club de football d'élite.\n"
+                    "Tu es expert dans l'analyse de l'ADN tactique et la recherche de profils similaires (clones).\n"
+                    "Rédige un rapport de scouting prédictif expliquant POURQUOI les clones trouvés partagent le même ADN tactique que le joueur cible.\n"
+                    "Base ton analyse exclusivement sur les statistiques réelles fournies.\n"
+                    "Formatte tes réponses en Markdown clair, avec un tableau comparatif mettant en valeur le joueur cible, son clone n°1 et les autres clones (incluant le pourcentage de similarité, le club, le poste et la valeur marchande).\n\n"
+                    "À la toute fin de ta réponse, après ton rapport textuel, tu dois TOUJOURS ajouter un bloc de données JSON "
+                    "structuré sous cette forme exacte, entouré de balises de code markdown (```json ... ```) :\n"
+                    "```json\n"
+                    "{\n"
+                    "  \"chart_type\": \"radar\",\n"
+                    "  \"metrics\": [\"goals\", \"xg\", \"xa\", \"key_passes\", \"dribbles_prog\", \"pressions_def\"],\n"
+                    "  \"players\": [\n"
+                    "    {\"name\": \"" + canonical_target_name + " (Cible)\", \"data\": [" + str(target_profile['total_goals'] or 0) + ", " + str(target_profile['total_xg'] or 0.0) + ", " + str(target_profile['total_xa'] or 0.0) + ", " + str(target_profile['total_kp'] or 0) + ", " + str(target_profile['total_dribbles'] or 0) + ", " + str(target_profile['total_pressures'] or 0) + "]},\n"
+                    "    {\"name\": \"" + top_clones[0]['player_name'] + " (Match: " + f"{top_clones[0]['similarity']:.1f}" + "%)\", \"data\": [" + str(top_clones[0]['goals'] or 0) + ", " + str(top_clones[0]['xg'] or 0.0) + ", " + str(top_clones[0]['xa'] or 0.0) + ", " + str(top_clones[0]['key_passes'] or 0) + ", " + str(top_clones[0]['dribbles_prog'] or 0) + ", " + str(top_clones[0]['pressions_def'] or 0) + "]}\n"
+                    "  ]\n"
+                    "}\n"
+                    "```\n"
+                    "Utilise les vraies valeurs extraites pour chaque joueur (pas de placeholders, pas de valeurs fictives). "
+                    "Les valeurs du JSON doivent être les totaux cumulés absolus (pas par 90 min) pour correspondre au format d'affichage du radar.\n"
+                    "Ne mets aucun texte après ce bloc JSON."
+                )
+
+                target_val = target_profile.get('market_value')
+                target_val_str = f"{target_val/1000000:.1f} M€" if target_val else "N/A"
+                
+                user_message = (
+                    f"🔬 ANALYSE D'ADN TACTIQUE (RECHERCHE DE SIMILARITÉ)\n\n"
+                    f"Joueur cible recherché : {canonical_target_name}\n"
+                    f"Saison d'analyse : {request.season}\n\n"
+                    f"Profil de la cible :\n"
+                    f"- Club : {target_profile.get('team_name')}\n"
+                    f"- Poste : {target_profile.get('position')}\n"
+                    f"- Valeur marchande : {target_val_str}\n"
+                    f"- Note moyenne : {target_profile.get('rating') or 'N/A'}/10\n"
+                    f"- Minutes jouées : {target_profile['total_minutes']} min\n"
+                    f"- Stats absolues : {target_profile['total_goals']} buts, {target_profile['total_xg']} xG, {target_profile['total_xa']} xA, {target_profile['total_kp']} passes clés, {target_profile['total_dribbles']} dribbles, {target_profile['total_pressures']} pressions.\n\n"
+                    f"Top 5 des profils similaires (clones tactiques) identifiés :\n"
+                )
+
+                for idx, c in enumerate(top_clones):
+                    val_str = f"{c['market_value']/1000000:.1f} M€" if c['market_value'] else "N/A"
+                    user_message += (
+                        f"{idx+1}. {c['player_name']} (Similarité: {c['similarity']:.1f}%)\n"
+                        f"   - Club: {c['team_name']} | Poste: {c['position']} | Valeur: {val_str} | Note: {c['rating'] or 'N/A'}/10\n"
+                        f"   - Minutes: {c['minutes']} min | Stats: {c['goals']} buts, {c['xg']} xG, {c['xa']} xA, {c['key_passes']} passes clés, {c['dribbles_prog']} dribbles, {c['pressions_def']} pressions.\n"
+                    )
+            else:
+                system_instruction = "Tu es un assistant de football d'élite."
+                user_message = f"Le joueur '{candidate_words[0] if candidate_words else 'demandé'}' ou ses statistiques n'ont pas été trouvés dans la base de données pour la saison {request.season}. Explique à l'utilisateur qu'il est impossible de réaliser la recherche de similarité sans ces données."
+
+            response = ai_client.chat.completions.create(
+                model="openrouter/free",
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.3,
+                stream=True
+            )
+            
+            def generate_chunks():
+                try:
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            yield chunk.choices[0].delta.content
+                except Exception as e:
+                    print(f"💥 ERREUR DE STREAMING : {str(e)}")
+
+            return StreamingResponse(generate_chunks(), media_type="text/plain")
+
+        # Code original (Recherche SQL Standard)
         sql_query = None
         sql_rows = []
         use_fallback = False

@@ -19,11 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const season = seasonSelect.value;
 
-        // UI State: Loading (conforming to the React template's CSS styles)
+        // UI State: Loading (Custom Obsidian loading style)
         analyzeBtn.disabled = true;
         analyzeBtn.textContent = 'Analyse...';
-        analyzeBtn.style.backgroundColor = '#27272a';
-        analyzeBtn.style.color = '#a1a1aa';
+        analyzeBtn.style.background = 'rgba(255, 255, 255, 0.05)';
+        analyzeBtn.style.color = '#71717a';
+        analyzeBtn.style.boxShadow = 'none';
         analyzeBtn.style.cursor = 'not-allowed';
 
         // Reset error
@@ -37,6 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Hide and clear chart
         chartContainer.classList.add('hidden');
         chartContainer.innerHTML = '';
+
+        // Reset DNA widget
+        const dnaWidget = document.getElementById('dna-widget');
+        if (dnaWidget) {
+            dnaWidget.classList.add('hidden');
+            dnaWidget.innerHTML = '';
+        }
         
         responseLoading.classList.remove('hidden');
         responseBox.classList.remove('hidden');
@@ -115,12 +123,13 @@ document.addEventListener('DOMContentLoaded', () => {
             errorBox.classList.remove('hidden');
             responseBox.classList.add('hidden');
         } finally {
-            // Restore button states
+            // Restore button states using CSS classes
             analyzeBtn.disabled = false;
             analyzeBtn.textContent = 'Analyser';
-            analyzeBtn.style.backgroundColor = '#fafafa';
-            analyzeBtn.style.color = '#09090b';
-            analyzeBtn.style.cursor = 'pointer';
+            analyzeBtn.style.background = '';
+            analyzeBtn.style.color = '';
+            analyzeBtn.style.boxShadow = '';
+            analyzeBtn.style.cursor = '';
             responseLoading.classList.add('hidden');
         }
     });
@@ -142,17 +151,109 @@ const METRIC_LABELS = {
     'pressions_def': 'Pressions Défensives'
 };
 
+// Premium Neon Palette for "Cyber Obsidian & Electric Glow"
 const COLORS = [
-    { fill: 'rgba(255, 255, 255, 0.12)', stroke: '#ffffff', shadow: 'rgba(255, 255, 255, 0.3)' }, // Blanc
-    { fill: 'rgba(255, 214, 10, 0.12)', stroke: '#ffd60a', shadow: 'rgba(255, 214, 10, 0.3)' }, // Ambre
-    { fill: 'rgba(10, 132, 255, 0.12)', stroke: '#0a84ff', shadow: 'rgba(10, 132, 255, 0.3)' }, // Bleu
-    { fill: 'rgba(191, 90, 242, 0.12)', stroke: '#bf5af2', shadow: 'rgba(191, 90, 242, 0.3)' }  // Violet
+    { fill: 'rgba(255, 255, 255, 0.05)', stroke: '#ffffff', shadow: 'rgba(255, 255, 255, 0.5)' }, // Blanc Néon (Cible)
+    { fill: 'rgba(6, 182, 212, 0.05)', stroke: '#06b6d4', shadow: 'rgba(6, 182, 212, 0.5)' }, // Cyan Néon (Clone 1)
+    { fill: 'rgba(16, 185, 129, 0.05)', stroke: '#10b981', shadow: 'rgba(16, 185, 129, 0.5)' }, // Émeraude Néon (Clone 2)
+    { fill: 'rgba(139, 92, 246, 0.05)', stroke: '#8b5cf6', shadow: 'rgba(139, 92, 246, 0.5)' }  // Violet Néon
 ];
 
 function renderSvgChart(chartData) {
     const chartContainer = document.getElementById('chart-container');
     if (!chartContainer || !chartData || !chartData.metrics || !chartData.players || chartData.players.length === 0) {
         return;
+    }
+
+    // Ensure chartContainer is inside visuals-container for DNA & Radar flex layout
+    let visualsContainer = document.getElementById('visuals-container');
+    if (!visualsContainer) {
+        visualsContainer = document.createElement('div');
+        visualsContainer.id = 'visuals-container';
+        visualsContainer.className = 'visuals-container';
+        chartContainer.parentNode.insertBefore(visualsContainer, chartContainer);
+        visualsContainer.appendChild(chartContainer);
+    }
+
+    // Extract DNA Match Percentage if present
+    let matchPercent = null;
+    chartData.players.forEach(p => {
+        const match = p.name.match(/Match:\s*([0-9.]+)\s*%/i) || p.name.match(/([0-9.]+)\s*%/);
+        if (match) {
+            matchPercent = parseFloat(match[1]);
+        }
+    });
+
+    // Render DNA Widget next to the Radar
+    let dnaWidget = document.getElementById('dna-widget');
+    if (matchPercent !== null) {
+        if (!dnaWidget) {
+            dnaWidget = document.createElement('div');
+            dnaWidget.id = 'dna-widget';
+            dnaWidget.className = 'dna-widget';
+            visualsContainer.appendChild(dnaWidget);
+        }
+        
+        const radius = 54;
+        const circumference = 2 * Math.PI * radius;
+        const strokeDashoffset = circumference - (matchPercent / 100) * circumference;
+        
+        dnaWidget.innerHTML = `
+            <div class="dna-widget-title">DNA Similarity</div>
+            <div class="progress-ring-container">
+                <svg width="150" height="150" viewBox="0 0 150 150">
+                    <defs>
+                        <linearGradient id="dna-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#06b6d4" />
+                            <stop offset="100%" stop-color="#10b981" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Track Ring -->
+                    <circle 
+                        cx="75" 
+                        cy="75" 
+                        r="${radius}" 
+                        fill="none" 
+                        stroke="rgba(255, 255, 255, 0.04)" 
+                        stroke-width="8" 
+                    />
+                    <!-- Progress Ring -->
+                    <circle 
+                        id="dna-progress-ring"
+                        cx="75" 
+                        cy="75" 
+                        r="${radius}" 
+                        fill="none" 
+                        stroke="url(#dna-gradient)" 
+                        stroke-width="8" 
+                        stroke-dasharray="${circumference}" 
+                        stroke-dashoffset="${circumference}" 
+                        stroke-linecap="round"
+                        transform="rotate(-90 75 75)"
+                        style="transition: stroke-dashoffset 1.5s cubic-bezier(0.25, 1, 0.5, 1); filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.5));"
+                    />
+                </svg>
+                <div class="progress-ring-text">
+                    <span class="progress-ring-value">${matchPercent.toFixed(1)}%</span>
+                    <span class="progress-ring-label">DNA Match</span>
+                </div>
+            </div>
+        `;
+        
+        // Trigger drawing animation
+        setTimeout(() => {
+            const ring = document.getElementById('dna-progress-ring');
+            if (ring) {
+                ring.style.strokeDashoffset = strokeDashoffset;
+            }
+        }, 150);
+        
+        dnaWidget.classList.remove('hidden');
+    } else {
+        if (dnaWidget) {
+            dnaWidget.classList.add('hidden');
+            dnaWidget.innerHTML = '';
+        }
     }
 
     const metrics = chartData.metrics;
@@ -189,7 +290,7 @@ function renderSvgChart(chartData) {
                 const barY = yOffset + pIdx * 13;
 
                 barHtml += `
-                    <rect x="150" y="${barY}" width="${barWidth}" height="8" rx="4" fill="${color.stroke}" style="filter: drop-shadow(0 0 2px ${color.shadow});" />
+                    <rect x="150" y="${barY}" width="${barWidth}" height="8" rx="4" fill="${color.stroke}" style="filter: drop-shadow(0 0 3px ${color.shadow});" />
                     <text x="${156 + barWidth}" y="${barY + 7}" fill="#a1a1aa" font-size="9" font-weight="500" font-family="inherit">${val}</text>
                 `;
             });
@@ -207,7 +308,26 @@ function renderSvgChart(chartData) {
         const R = 110;
         const angleStep = (Math.PI * 2) / numMetrics;
 
-        // Anneaux concentriques
+        // Custom glow SVG filters to build glowing hulls
+        let defsHtml = '<defs>';
+        players.forEach((_, pIdx) => {
+            const color = COLORS[pIdx % COLORS.length];
+            defsHtml += `
+                <filter id="glow-${pIdx}" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feComponentTransfer in="blur" result="boost">
+                        <feFuncA type="linear" slope="1.6" />
+                    </feComponentTransfer>
+                    <feMerge>
+                        <feMergeNode in="boost" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            `;
+        });
+        defsHtml += '</defs>';
+
+        // Anneaux concentriques (Crisp tactical grid)
         let gridHtml = '';
         const levels = [0.25, 0.5, 0.75, 1.0];
         levels.forEach(level => {
@@ -218,7 +338,7 @@ function renderSvgChart(chartData) {
                 const y = CY + R * level * Math.sin(angle);
                 points.push(`${x},${y}`);
             }
-            gridHtml += `<polygon points="${points.join(' ')}" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" stroke-dasharray="3,3" />`;
+            gridHtml += `<polygon points="${points.join(' ')}" fill="none" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1" stroke-dasharray="3,3" />`;
         });
 
         // Axes (spokes)
@@ -227,10 +347,10 @@ function renderSvgChart(chartData) {
             const angle = -Math.PI / 2 + i * angleStep;
             const x = CX + R * Math.cos(angle);
             const y = CY + R * Math.sin(angle);
-            spokeHtml += `<line x1="${CX}" y1="${CY}" x2="${x}" y2="${y}" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1" />`;
+            spokeHtml += `<line x1="${CX}" y1="${CY}" x2="${x}" y2="${y}" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1" />`;
         }
 
-        // Polygones et points des joueurs
+        // Polygones et points des joueurs (Thicker glowing outlines)
         let playersPolygons = '';
         let playersPoints = '';
         players.forEach((player, pIdx) => {
@@ -243,11 +363,11 @@ function renderSvgChart(chartData) {
                 const y = CY + R * normVal * Math.sin(angle);
                 points.push(`${x},${y}`);
 
-                // Cercle sur chaque sommet
-                playersPoints += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color.stroke}" style="filter: drop-shadow(0 0 2px ${color.shadow});" />`;
+                // Cercles sur chaque sommet
+                playersPoints += `<circle cx="${x}" cy="${y}" r="4" fill="${color.stroke}" style="filter: drop-shadow(0 0 3px ${color.shadow});" />`;
             });
 
-            playersPolygons += `<polygon points="${points.join(' ')}" fill="${color.fill}" stroke="${color.stroke}" stroke-width="2" style="filter: drop-shadow(0 0 3px ${color.shadow});" />`;
+            playersPolygons += `<polygon points="${points.join(' ')}" fill="${color.fill}" stroke="${color.stroke}" stroke-width="3" style="filter: url(#glow-${pIdx});" />`;
         });
 
         // Étiquettes textuelles
@@ -267,11 +387,12 @@ function renderSvgChart(chartData) {
             if (Math.sin(angle) < -0.9) dy = "-0.1em";
             if (Math.sin(angle) > 0.9) dy = "1.0em";
 
-            labelsHtml += `<text x="${x}" y="${y}" fill="#a1a1aa" font-size="11" font-weight="500" text-anchor="${textAnchor}" dy="${dy}" font-family="inherit">${labelText}</text>`;
+            labelsHtml += `<text x="${x}" y="${y}" fill="#a1a1aa" font-size="10" font-weight="600" text-anchor="${textAnchor}" dy="${dy}" font-family="inherit">${labelText}</text>`;
         }
 
         svgHtml = `
             <svg class="chart-svg" width="500" height="380" viewBox="0 0 500 380" xmlns="http://www.w3.org/2000/svg">
+                ${defsHtml}
                 <g>${gridHtml}${spokeHtml}</g>
                 <g>${playersPolygons}${playersPoints}</g>
                 <g>${labelsHtml}</g>
